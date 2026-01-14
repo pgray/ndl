@@ -24,6 +24,10 @@ Social media notifications can pull you out of flow state. needle lets you:
 
 ## Installation
 
+```bash
+cargo install ndl
+```
+
 ### From source
 
 ```bash
