@@ -49,6 +49,7 @@ pub struct App {
     pub event_tx: mpsc::Sender<AppEvent>,
     pub selected_replies: Vec<ReplyThread>,
     pub loaded_replies_for: Option<String>, // thread_id we've loaded replies for
+    pub reply_selection: Option<usize>,     // index into flattened replies (None = main thread)
 }
 
 impl App {
@@ -75,6 +76,7 @@ impl App {
             event_tx,
             selected_replies: Vec::new(),
             loaded_replies_for: None,
+            reply_selection: None,
         }
     }
 
@@ -211,16 +213,16 @@ impl App {
         };
 
         let help_text = "\
-j / Down     Move down
-k / Up       Move up
+j / Down     Move down (or select reply)
+k / Up       Move up (or select reply)
 h / Left     Focus left panel
 l / Right    Focus right panel
 t            Swap panel positions
 p            Create new post
-r            Reply to selected thread
+r            Reply to thread or reply
 R            Refresh threads
 Enter        Select item
-Esc          Back / Cancel
+Esc          Back / Cancel / Deselect
 q            Quit
 ?            Toggle help";
 
@@ -323,19 +325,29 @@ q            Quit
 
                 // Add replies section
                 if !self.selected_replies.is_empty() {
-                    content.push_str("\n\n--- Replies ---\n");
-                    fn format_replies(replies: &[ReplyThread], indent: usize, out: &mut String) {
+                    content.push_str("\n\n--- Replies (j/k to select, r to reply) ---\n");
+                    let selected_idx = self.reply_selection;
+                    fn format_replies(
+                        replies: &[ReplyThread],
+                        indent: usize,
+                        out: &mut String,
+                        counter: &mut usize,
+                        selected: Option<usize>,
+                    ) {
                         let prefix = "  ".repeat(indent);
                         for reply in replies {
                             let user = reply.thread.username.as_deref().unwrap_or("unknown");
                             let text = reply.thread.text.as_deref().unwrap_or("[no text]");
-                            out.push_str(&format!("\n{}@{}: {}\n", prefix, user, text));
+                            let marker = if selected == Some(*counter) { "> " } else { "  " };
+                            out.push_str(&format!("\n{}{}@{}: {}\n", marker, prefix, user, text));
+                            *counter += 1;
                             if !reply.replies.is_empty() {
-                                format_replies(&reply.replies, indent + 1, out);
+                                format_replies(&reply.replies, indent + 1, out, counter, selected);
                             }
                         }
                     }
-                    format_replies(&self.selected_replies, 0, &mut content);
+                    let mut counter = 0;
+                    format_replies(&self.selected_replies, 0, &mut content, &mut counter, selected_idx);
                 } else if self.loaded_replies_for.as_ref() == Some(&thread.id) {
                     content.push_str("\n\n--- No replies ---");
                 } else {
@@ -485,22 +497,28 @@ q            Quit
     }
 
     async fn send_reply(&mut self) {
-        if let Some(idx) = self.list_state.selected() {
-            if let Some(thread) = self.threads.get(idx) {
-                let thread_id = thread.id.clone();
-                let text = self.input_buffer.clone();
-                let client = self.client.clone();
-                let tx = self.event_tx.clone();
+        // Determine what to reply to: selected reply or main thread
+        let reply_to_id = if let Some(reply_idx) = self.reply_selection {
+            Self::get_reply_id_at_index(&self.selected_replies, reply_idx)
+        } else if let Some(idx) = self.list_state.selected() {
+            self.threads.get(idx).map(|t| t.id.clone())
+        } else {
+            None
+        };
 
-                self.status_message = Some("Sending reply...".to_string());
+        if let Some(thread_id) = reply_to_id {
+            let text = self.input_buffer.clone();
+            let client = self.client.clone();
+            let tx = self.event_tx.clone();
 
-                tokio::spawn(async move {
-                    let result = client.reply_to_thread(&thread_id, &text).await;
-                    let _ = tx
-                        .send(AppEvent::ReplyResult(result.map(|_| ()).map_err(|e| e.to_string())))
-                        .await;
-                });
-            }
+            self.status_message = Some("Sending reply...".to_string());
+
+            tokio::spawn(async move {
+                let result = client.reply_to_thread(&thread_id, &text).await;
+                let _ = tx
+                    .send(AppEvent::ReplyResult(result.map(|_| ()).map_err(|e| e.to_string())))
+                    .await;
+            });
         }
     }
 
@@ -544,6 +562,7 @@ q            Quit
                     // Clear old replies while loading
                     self.selected_replies.clear();
                     self.loaded_replies_for = None;
+                    self.reply_selection = None;
 
                     tokio::spawn(async move {
                         let result = client.get_thread_replies_nested(&thread_id, 2) // 2 levels deep
@@ -557,37 +576,47 @@ q            Quit
     }
 
     fn move_down(&mut self) {
-        if self.threads.is_empty() {
-            return;
-        }
-        let i = match self.list_state.selected() {
-            Some(i) => {
-                if i >= self.threads.len().saturating_sub(1) {
-                    0
-                } else {
-                    i + 1
+        match self.active_panel {
+            Panel::Threads => {
+                if self.threads.is_empty() {
+                    return;
                 }
+                let i = match self.list_state.selected() {
+                    Some(i) => {
+                        if i >= self.threads.len().saturating_sub(1) {
+                            0
+                        } else {
+                            i + 1
+                        }
+                    }
+                    None => 0,
+                };
+                self.list_state.select(Some(i));
             }
-            None => 0,
-        };
-        self.list_state.select(Some(i));
+            Panel::Detail => self.reply_move_down(),
+        }
     }
 
     fn move_up(&mut self) {
-        if self.threads.is_empty() {
-            return;
-        }
-        let i = match self.list_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.threads.len().saturating_sub(1)
-                } else {
-                    i - 1
+        match self.active_panel {
+            Panel::Threads => {
+                if self.threads.is_empty() {
+                    return;
                 }
+                let i = match self.list_state.selected() {
+                    Some(i) => {
+                        if i == 0 {
+                            self.threads.len().saturating_sub(1)
+                        } else {
+                            i - 1
+                        }
+                    }
+                    None => 0,
+                };
+                self.list_state.select(Some(i));
             }
-            None => 0,
-        };
-        self.list_state.select(Some(i));
+            Panel::Detail => self.reply_move_up(),
+        }
     }
 
     fn move_left(&mut self) {
@@ -607,6 +636,60 @@ q            Quit
     }
 
     fn deselect(&mut self) {
-        self.active_panel = Panel::Threads;
+        // If a reply is selected, deselect it first
+        if self.reply_selection.is_some() {
+            self.reply_selection = None;
+        } else {
+            // Otherwise go back to threads panel
+            self.active_panel = Panel::Threads;
+        }
+    }
+
+    /// Count total flattened replies
+    fn count_replies(replies: &[ReplyThread]) -> usize {
+        replies.iter().fold(0, |acc, r| {
+            acc + 1 + Self::count_replies(&r.replies)
+        })
+    }
+
+    /// Get the reply ID at the given flattened index
+    fn get_reply_id_at_index(replies: &[ReplyThread], target: usize) -> Option<String> {
+        let mut current = 0;
+        fn find(replies: &[ReplyThread], target: usize, current: &mut usize) -> Option<String> {
+            for reply in replies {
+                if *current == target {
+                    return Some(reply.thread.id.clone());
+                }
+                *current += 1;
+                if let Some(id) = find(&reply.replies, target, current) {
+                    return Some(id);
+                }
+            }
+            None
+        }
+        find(replies, target, &mut current)
+    }
+
+    fn reply_move_down(&mut self) {
+        let count = Self::count_replies(&self.selected_replies);
+        if count == 0 {
+            return;
+        }
+        self.reply_selection = Some(match self.reply_selection {
+            Some(i) if i >= count - 1 => 0,
+            Some(i) => i + 1,
+            None => 0,
+        });
+    }
+
+    fn reply_move_up(&mut self) {
+        let count = Self::count_replies(&self.selected_replies);
+        if count == 0 {
+            return;
+        }
+        self.reply_selection = Some(match self.reply_selection {
+            Some(0) | None => count.saturating_sub(1),
+            Some(i) => i - 1,
+        });
     }
 }

@@ -284,13 +284,11 @@ impl ThreadsClient {
             let response = self.client.get(&status_url).send().await?;
             if response.status().is_success() {
                 let body: serde_json::Value = response.json().await?;
-                if let Some(status) = body.get("status").and_then(|s| s.as_str()) {
-                    match status {
-                        "FINISHED" => return Ok(()),
-                        "ERROR" => return Err(ApiError::Api("Container processing failed".to_string())),
-                        "EXPIRED" => return Err(ApiError::Api("Container expired".to_string())),
-                        _ => continue, // IN_PROGRESS, keep waiting
-                    }
+                match body.get("status").and_then(|s| s.as_str()) {
+                    Some("FINISHED") | None => return Ok(()), // No status = ready for text posts
+                    Some("ERROR") => return Err(ApiError::Api("Container processing failed".to_string())),
+                    Some("EXPIRED") => return Err(ApiError::Api("Container expired".to_string())),
+                    Some(_) => continue, // IN_PROGRESS, keep waiting
                 }
             }
         }
