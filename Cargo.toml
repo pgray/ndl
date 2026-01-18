@@ -1,3 +1,10 @@
 [workspace]
 resolver = "2"
 members = ["ndl", "ndld"]
+
+[workspace.package]
+version = "0.1.6"
+edition = "2024"
+authors = ["hi@pgray.dev"]
+license = "MIT"
+repository = "https://github.com/pgray/ndl"

@@ -41,6 +41,9 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
+        Some("--version") | Some("-V") => {
+            print_version();
+        }
         Some("login") => {
             tracing::info!("login command");
             if let Err(e) = run_login().await {
@@ -192,12 +195,19 @@ fn run_logout() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn print_version() {
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    const GIT_VERSION: &str = env!("NDL_GIT_VERSION");
+    println!("ndl {} ({})", VERSION, GIT_VERSION);
+}
+
 fn print_usage() {
     println!("Usage: ndl [command]");
     println!();
     println!("Commands:");
-    println!("  login   Authenticate with Threads");
-    println!("  logout  Remove saved access token");
+    println!("  login     Authenticate with Threads");
+    println!("  logout    Remove saved access token");
+    println!("  --version Show version information");
     println!();
     println!("Run without arguments to start the TUI.");
 }

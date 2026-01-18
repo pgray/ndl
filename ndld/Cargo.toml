@@ -1,11 +1,11 @@
 [package]
 name = "ndld"
-version = "0.1.0"
-edition = "2024"
-authors = ["hi@pgray.dev"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "OAuth server for ndl - handles Threads authentication"
-license = "MIT"
-repository = "https://github.com/pgray/ndl"
 
 [dependencies]
 # HTTP framework

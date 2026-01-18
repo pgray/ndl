@@ -55,8 +55,23 @@ fn spawn_shutdown_handler(handle: Handle<SocketAddr>) {
     });
 }
 
+fn print_version() {
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    const GIT_VERSION: &str = env!("NDLD_GIT_VERSION");
+    println!("ndld {} ({})", VERSION, GIT_VERSION);
+}
+
 #[tokio::main]
 async fn main() {
+    // Handle --version flag before anything else
+    let args: Vec<String> = env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("--version")
+        || args.get(1).map(|s| s.as_str()) == Some("-V")
+    {
+        print_version();
+        return;
+    }
+
     // Initialize tracing
     tracing_subscriber::registry()
         .with(
