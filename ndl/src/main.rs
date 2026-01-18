@@ -91,15 +91,36 @@ async fn main() {
 
             // Fetch initial data
             tracing::debug!("Fetching threads");
-            let threads = match client.get_threads(Some(25)).await {
+            let (client, threads) = match client.get_threads(Some(25)).await {
                 Ok(resp) => {
                     tracing::debug!("Fetched {} threads", resp.data.len());
-                    resp.data
+                    (client, resp.data)
+                }
+                Err(e) if is_auth_error(&e.to_string()) => {
+                    tracing::warn!("Token expired or invalid, re-authenticating...");
+                    eprintln!("Token expired. Re-authenticating...");
+                    if let Err(e) = run_login().await {
+                        tracing::error!("Login failed: {}", e);
+                        eprintln!("Login failed: {}", e);
+                        std::process::exit(1);
+                    }
+                    // Reload with new token
+                    let config = Config::load().expect("Failed to reload config");
+                    let token = config.access_token.expect("No token after login");
+                    let client = ThreadsClient::new(token);
+                    match client.get_threads(Some(25)).await {
+                        Ok(resp) => (client, resp.data),
+                        Err(e) => {
+                            tracing::error!("Failed to fetch threads after re-auth: {}", e);
+                            eprintln!("Failed to fetch threads: {}", e);
+                            (client, Vec::new())
+                        }
+                    }
                 }
                 Err(e) => {
                     tracing::error!("Failed to fetch threads: {}", e);
                     eprintln!("Failed to fetch threads: {}", e);
-                    Vec::new()
+                    (client, Vec::new())
                 }
             };
 
@@ -179,4 +200,16 @@ fn print_usage() {
     println!("  logout  Remove saved access token");
     println!();
     println!("Run without arguments to start the TUI.");
+}
+
+/// Check if an API error indicates an authentication problem
+fn is_auth_error(error: &str) -> bool {
+    let error_lower = error.to_lowercase();
+    error_lower.contains("oauthexception")
+        || error_lower.contains("invalid access token")
+        || error_lower.contains("session has expired")
+        || error_lower.contains("token has expired")
+        || error_lower.contains("requires the threads_")  // permission errors
+        || error.contains("\"code\":190")  // Facebook/Meta invalid token code
+        || error.contains("\"code\":102")  // Session expired
 }

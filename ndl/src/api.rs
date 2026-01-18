@@ -1,6 +1,7 @@
 use futures::future::join_all;
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -215,12 +216,65 @@ impl ThreadsClient {
             .collect())
     }
 
+    /// Wait for container to be ready (poll until FINISHED or ERROR)
+    async fn wait_for_container(&self, container_id: &str) -> Result<String, ApiError> {
+        #[derive(Deserialize)]
+        struct StatusResponse {
+            status: Option<String>,
+            error_message: Option<String>,
+        }
+
+        let url = format!(
+            "{}/{}?fields=status,error_message&access_token={}",
+            BASE_URL, container_id, self.access_token
+        );
+
+        // Poll up to 15 times with 2s delay (30 seconds max)
+        for attempt in 0..15 {
+            let response = self.client.get(&url).send().await?;
+            let body = response.text().await.unwrap_or_default();
+
+            let status_resp: StatusResponse =
+                serde_json::from_str(&body).unwrap_or(StatusResponse {
+                    status: Some("UNKNOWN".to_string()),
+                    error_message: None,
+                });
+
+            let status = status_resp.status.unwrap_or_else(|| "UNKNOWN".to_string());
+            tracing::debug!("Container status check {}: {}", attempt + 1, status);
+
+            if let Some(err) = &status_resp.error_message {
+                tracing::warn!("Container error: {}", err);
+            }
+
+            match status.as_str() {
+                "FINISHED" => return Ok(status),
+                "ERROR" => {
+                    let err_msg = status_resp
+                        .error_message
+                        .unwrap_or_else(|| "Unknown error".to_string());
+                    return Err(ApiError::Api(format!("Container failed: {}", err_msg)));
+                }
+                "IN_PROGRESS" => {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                }
+                _ => {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                }
+            }
+        }
+
+        Err(ApiError::Api("Container processing timed out".to_string()))
+    }
+
     /// Create a reply to a thread (two-step: create container, then publish)
     pub async fn reply_to_thread(
         &self,
         reply_to_id: &str,
         text: &str,
     ) -> Result<PublishResponse, ApiError> {
+        tracing::debug!("Attempting reply to thread ID: {}", reply_to_id);
+
         // Step 1: Create container
         let container_url = format!(
             "{}/me/threads?media_type=TEXT&text={}&reply_to_id={}&access_token={}",
@@ -231,16 +285,41 @@ impl ThreadsClient {
         );
 
         let response = self.client.post(&container_url).send().await?;
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
 
-        if !response.status().is_success() {
-            let body = response.text().await.unwrap_or_default();
+        tracing::debug!("Container creation response ({}): {}", status, body);
+
+        if !status.is_success() {
             return Err(ApiError::Api(format!(
                 "Container creation failed: {}",
                 body
             )));
         }
 
-        let container: ContainerResponse = response.json().await?;
+        // Check for error in response body (API sometimes returns 200 with error)
+        if body.contains("\"error\"") {
+            return Err(ApiError::Api(format!(
+                "Cannot reply to this thread: {}",
+                body
+            )));
+        }
+
+        let container: ContainerResponse = serde_json::from_str(&body)
+            .map_err(|e| ApiError::Api(format!("Invalid container response: {} - {}", e, body)))?;
+
+        tracing::debug!("Container created with ID: {}", container.id);
+
+        // Wait for container to be ready (poll until FINISHED or ERROR)
+        let status = self.wait_for_container(&container.id).await?;
+        tracing::debug!("Final container status: {}", status);
+
+        if status != "FINISHED" {
+            return Err(ApiError::Api(format!(
+                "Container not ready for publish: {}",
+                status
+            )));
+        }
 
         // Step 2: Publish
         let publish_url = format!(
@@ -281,7 +360,13 @@ impl ThreadsClient {
         let container: ContainerResponse = response.json().await?;
 
         // Step 2: Wait for container to be ready
-        self.wait_for_container(&container.id).await?;
+        let status = self.wait_for_container(&container.id).await?;
+        if status != "FINISHED" {
+            return Err(ApiError::Api(format!(
+                "Container not ready for publish: {}",
+                status
+            )));
+        }
 
         // Step 3: Publish
         let publish_url = format!(
@@ -297,32 +382,5 @@ impl ThreadsClient {
         }
 
         Ok(response.json().await?)
-    }
-
-    /// Wait for a media container to be ready for publishing
-    async fn wait_for_container(&self, container_id: &str) -> Result<(), ApiError> {
-        let status_url = format!(
-            "{}/{}?fields=status&access_token={}",
-            BASE_URL, container_id, self.access_token
-        );
-
-        for _ in 0..10 {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-            let response = self.client.get(&status_url).send().await?;
-            if response.status().is_success() {
-                let body: serde_json::Value = response.json().await?;
-                match body.get("status").and_then(|s| s.as_str()) {
-                    Some("FINISHED") | None => return Ok(()), // No status = ready for text posts
-                    Some("ERROR") => {
-                        return Err(ApiError::Api("Container processing failed".to_string()));
-                    }
-                    Some("EXPIRED") => return Err(ApiError::Api("Container expired".to_string())),
-                    Some(_) => continue, // IN_PROGRESS, keep waiting
-                }
-            }
-        }
-
-        Err(ApiError::Api("Container processing timed out".to_string()))
     }
 }
