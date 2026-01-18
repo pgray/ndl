@@ -41,7 +41,7 @@ impl OAuthConfig {
 
     pub fn authorization_url(&self) -> String {
         format!(
-            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_read_replies,threads_manage_replies&response_type=code",
+            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish&response_type=code",
             self.client_id,
             urlencoding::encode(&self.redirect_uri)
         )

@@ -252,7 +252,10 @@ impl ThreadsClient {
 
         let container: ContainerResponse = response.json().await?;
 
-        // Step 2: Publish
+        // Step 2: Wait for container to be ready
+        self.wait_for_container(&container.id).await?;
+
+        // Step 3: Publish
         let publish_url = format!(
             "{}/me/threads_publish?creation_id={}&access_token={}",
             BASE_URL, container.id, self.access_token
@@ -266,5 +269,32 @@ impl ThreadsClient {
         }
 
         Ok(response.json().await?)
+    }
+
+    /// Wait for a media container to be ready for publishing
+    async fn wait_for_container(&self, container_id: &str) -> Result<(), ApiError> {
+        let status_url = format!(
+            "{}/{}?fields=status&access_token={}",
+            BASE_URL, container_id, self.access_token
+        );
+
+        for _ in 0..10 {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let response = self.client.get(&status_url).send().await?;
+            if response.status().is_success() {
+                let body: serde_json::Value = response.json().await?;
+                if let Some(status) = body.get("status").and_then(|s| s.as_str()) {
+                    match status {
+                        "FINISHED" => return Ok(()),
+                        "ERROR" => return Err(ApiError::Api("Container processing failed".to_string())),
+                        "EXPIRED" => return Err(ApiError::Api("Container expired".to_string())),
+                        _ => continue, // IN_PROGRESS, keep waiting
+                    }
+                }
+            }
+        }
+
+        Err(ApiError::Api("Container processing timed out".to_string()))
     }
 }

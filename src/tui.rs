@@ -24,11 +24,13 @@ pub enum Panel {
 pub enum InputMode {
     Normal,
     Replying,
+    Posting,
 }
 
 pub enum AppEvent {
     ThreadsUpdated(Vec<Thread>),
     ReplyResult(Result<(), String>),
+    PostResult(Result<(), String>),
     RepliesLoaded(String, Result<Vec<ReplyThread>, String>), // (thread_id, nested replies or error)
 }
 
@@ -142,8 +144,8 @@ impl App {
             self.draw_help(frame);
         }
 
-        if self.input_mode == InputMode::Replying {
-            self.draw_reply_input(frame);
+        if self.input_mode == InputMode::Replying || self.input_mode == InputMode::Posting {
+            self.draw_input(frame);
         }
     }
 
@@ -151,7 +153,7 @@ impl App {
         let status = self
             .status_message
             .as_deref()
-            .unwrap_or("? for help | r to reply | R to refresh");
+            .unwrap_or("? for help | p to post | r to reply | R to refresh");
 
         let style = if self.status_message.is_some() {
             Style::default().fg(Color::Yellow)
@@ -166,7 +168,7 @@ impl App {
         frame.render_widget(paragraph, area);
     }
 
-    fn draw_reply_input(&self, frame: &mut Frame) {
+    fn draw_input(&self, frame: &mut Frame) {
         let area = frame.area();
         let popup_width = 60.min(area.width.saturating_sub(4));
         let popup_height = 5;
@@ -179,10 +181,16 @@ impl App {
 
         frame.render_widget(Clear, popup_area);
 
+        let title = match self.input_mode {
+            InputMode::Replying => " Reply (Enter to send, Esc to cancel) ",
+            InputMode::Posting => " New Post (Enter to send, Esc to cancel) ",
+            InputMode::Normal => "",
+        };
+
         let input = Paragraph::new(self.input_buffer.as_str())
             .block(
                 Block::default()
-                    .title(" Reply (Enter to send, Esc to cancel) ")
+                    .title(title)
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Green)),
             )
@@ -194,7 +202,7 @@ impl App {
     fn draw_help(&self, frame: &mut Frame) {
         let area = frame.area();
         let popup_width = 42;
-        let popup_height = 16;
+        let popup_height = 17;
         let popup_area = Rect {
             x: area.width.saturating_sub(popup_width) / 2,
             y: area.height.saturating_sub(popup_height) / 2,
@@ -208,6 +216,7 @@ k / Up       Move up
 h / Left     Focus left panel
 l / Right    Focus right panel
 t            Swap panel positions
+p            Create new post
 r            Reply to selected thread
 R            Refresh threads
 Enter        Select item
@@ -370,6 +379,16 @@ q            Quit
                         Err(e) => self.status_message = Some(format!("Error: {}", e)),
                     }
                 }
+                AppEvent::PostResult(result) => {
+                    match result {
+                        Ok(()) => {
+                            self.status_message = Some("Post sent!".to_string());
+                            // Refresh to show the new post
+                            self.refresh_threads().await;
+                        }
+                        Err(e) => self.status_message = Some(format!("Error: {}", e)),
+                    }
+                }
                 AppEvent::RepliesLoaded(thread_id, result) => {
                     self.loaded_replies_for = Some(thread_id);
                     match result {
@@ -394,7 +413,7 @@ q            Quit
                     self.status_message = None;
 
                     match self.input_mode {
-                        InputMode::Replying => self.handle_reply_input(key.code).await,
+                        InputMode::Replying | InputMode::Posting => self.handle_input_mode(key.code).await,
                         InputMode::Normal => self.handle_normal_input(key.code).await,
                     }
                 }
@@ -403,11 +422,15 @@ q            Quit
         Ok(())
     }
 
-    async fn handle_reply_input(&mut self, key: KeyCode) {
+    async fn handle_input_mode(&mut self, key: KeyCode) {
         match key {
             KeyCode::Enter => {
                 if !self.input_buffer.is_empty() {
-                    self.send_reply().await;
+                    match self.input_mode {
+                        InputMode::Replying => self.send_reply().await,
+                        InputMode::Posting => self.send_post().await,
+                        InputMode::Normal => {}
+                    }
                 }
                 self.input_mode = InputMode::Normal;
                 self.input_buffer.clear();
@@ -437,6 +460,7 @@ q            Quit
             KeyCode::Char('?') => self.show_help = true,
             KeyCode::Char('t') => self.toggle_panel(),
             KeyCode::Char('r') => self.start_reply(),
+            KeyCode::Char('p') => self.start_post(),
             KeyCode::Char('R') => self.refresh_threads().await,
             KeyCode::Char('j') | KeyCode::Down => self.move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.move_up(),
@@ -453,6 +477,11 @@ q            Quit
             self.input_mode = InputMode::Replying;
             self.input_buffer.clear();
         }
+    }
+
+    fn start_post(&mut self) {
+        self.input_mode = InputMode::Posting;
+        self.input_buffer.clear();
     }
 
     async fn send_reply(&mut self) {
@@ -473,6 +502,21 @@ q            Quit
                 });
             }
         }
+    }
+
+    async fn send_post(&mut self) {
+        let text = self.input_buffer.clone();
+        let client = self.client.clone();
+        let tx = self.event_tx.clone();
+
+        self.status_message = Some("Posting...".to_string());
+
+        tokio::spawn(async move {
+            let result = client.post_thread(&text).await;
+            let _ = tx
+                .send(AppEvent::PostResult(result.map(|_| ()).map_err(|e| e.to_string())))
+                .await;
+        });
     }
 
     async fn refresh_threads(&mut self) {
