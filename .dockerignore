@@ -1,0 +1,7 @@
+target/
+.git/
+.gitignore
+*.md
+!ndld/Dockerfile
+pics/
+tests/

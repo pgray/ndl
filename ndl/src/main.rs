@@ -70,29 +70,44 @@ async fn main() {
     }
 }
 
+const DEFAULT_OAUTH_ENDPOINT: &str = "https://ndl.pgray.dev";
+
 async fn run_login() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = Config::load()?;
 
-    // Get client credentials from config or environment
-    let client_id = config
-        .client_id
-        .clone()
-        .or_else(|| env::var("NDL_CLIENT_ID").ok())
-        .ok_or("Missing client_id. Set NDL_CLIENT_ID or add to config.")?;
+    // Determine auth server: env var > config > default
+    // Empty string means "use local OAuth"
+    let auth_server = env::var("NDL_OAUTH_ENDPOINT")
+        .ok()
+        .or_else(|| config.auth_server.clone())
+        .unwrap_or_else(|| DEFAULT_OAUTH_ENDPOINT.to_string());
 
-    let client_secret = config
-        .client_secret
-        .clone()
-        .or_else(|| env::var("NDL_CLIENT_SECRET").ok())
-        .ok_or("Missing client_secret. Set NDL_CLIENT_SECRET or add to config.")?;
+    let token = if !auth_server.is_empty() {
+        // Use hosted auth server
+        oauth::hosted_login(&auth_server).await?
+    } else {
+        // Fall back to local OAuth flow
+        let client_id = config
+            .client_id
+            .clone()
+            .or_else(|| env::var("NDL_CLIENT_ID").ok())
+            .ok_or("Missing client_id. Set NDL_CLIENT_ID or add to config.")?;
 
-    // Run OAuth flow
-    let token = oauth::login(&client_id, &client_secret).await?;
+        let client_secret = config
+            .client_secret
+            .clone()
+            .or_else(|| env::var("NDL_CLIENT_SECRET").ok())
+            .ok_or("Missing client_secret. Set NDL_CLIENT_SECRET or add to config.")?;
+
+        // Save credentials to config for future use
+        config.client_id = Some(client_id.clone());
+        config.client_secret = Some(client_secret.clone());
+
+        oauth::login(&client_id, &client_secret).await?
+    };
 
     // Save token to config
     config.access_token = Some(token.access_token);
-    config.client_id = Some(client_id);
-    config.client_secret = Some(client_secret);
     config.save()?;
 
     println!("Token saved to {:?}", Config::path()?);

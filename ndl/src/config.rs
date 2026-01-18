@@ -19,6 +19,8 @@ pub struct Config {
     pub access_token: Option<String>,
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
+    /// Optional auth server URL for hosted OAuth flow
+    pub auth_server: Option<String>,
 }
 
 impl Config {

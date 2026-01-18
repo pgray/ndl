@@ -1,0 +1,35 @@
+[package]
+name = "ndl"
+version = "0.1.1"
+edition = "2024"
+authors = ["hi@pgray.dev"]
+description = "A minimal TUI client for Threads"
+license = "MIT"
+repository = "https://github.com/pgray/ndl"
+
+[dependencies]
+ratatui = { version = "0.30.0", features = ["serde"] }
+ratatui-macros = "0.7.0"
+crossterm = "0.29"
+
+# OAuth / HTTPS
+rcgen = "0.13"
+rustls = { version = "0.23", features = ["ring"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+axum = "0.8"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Async utilities
+futures = "0.3"
+
+# Utilities
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+dirs = "6"
+urlencoding = "2"
+open = "5"
+thiserror = "2"

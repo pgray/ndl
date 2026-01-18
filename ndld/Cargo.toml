@@ -1,0 +1,44 @@
+[package]
+name = "ndld"
+version = "0.1.0"
+edition = "2024"
+authors = ["hi@pgray.dev"]
+description = "OAuth server for ndl - handles Threads authentication"
+license = "MIT"
+repository = "https://github.com/pgray/ndl"
+
+[dependencies]
+# HTTP framework
+axum = "0.8"
+axum-server = { version = "0.8", features = ["tls-rustls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+
+# ACME / Let's Encrypt
+rustls-acme = { version = "0.15", features = ["axum", "ring"] }
+tokio-stream = "0.1"
+
+# HTTP client for token exchange
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# TLS
+rustls = { version = "0.23", features = ["ring"] }
+
+# Concurrent HashMap for sessions
+dashmap = "6"
+
+# UUID for session IDs
+uuid = { version = "1", features = ["v4"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# URL encoding
+urlencoding = "2"
+
+# HTML templating
+maud = { version = "0.27", features = ["axum"] }
