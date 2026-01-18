@@ -11,7 +11,7 @@ repository = "https://github.com/pgray/ndl"
 # HTTP framework
 axum = "0.8"
 axum-server = { version = "0.8", features = ["tls-rustls"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal"] }
 
 # ACME / Let's Encrypt
 rustls-acme = { version = "0.15", features = ["axum", "ring"] }
