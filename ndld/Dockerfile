@@ -1,4 +1,4 @@
-FROM rust:1.83-slim-bookworm AS builder
+FROM rust:slim-trixie AS builder
 
 WORKDIR /build
 
@@ -17,7 +17,7 @@ COPY ndld ndld
 RUN cargo build --release -p ndld
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
