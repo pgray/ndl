@@ -12,7 +12,8 @@ services:
       - NDLD_PORT=443
       - NDLD_ACME_DOMAIN=${NDLD_ACME_DOMAIN}
       - NDLD_ACME_EMAIL=${NDLD_ACME_EMAIL}
-      - NDLD_ACME_DIR=/data/acme
+      - NDLD_ACME_DIR=/var/lib/ndld/acme
     volumes:
-      - /ndld-data:/data
+      # Ensure host dir has correct ownership: sudo chown -R 10001:10001 /ndld-data
+      - /ndld-data:/var/lib/ndld
     restart: unless-stopped

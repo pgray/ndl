@@ -129,6 +129,11 @@ cargo run -p ndld
 ```bash
 cp .env.example .env
 # Edit .env with your credentials
+
+# Create data directory with correct ownership (ndld runs as UID 10001)
+sudo mkdir -p /ndld-data
+sudo chown 10001:10001 /ndld-data
+
 docker compose up -d
 ```
 
@@ -146,6 +151,10 @@ docker run -p 8080:8080 \
 For Let's Encrypt in Docker:
 
 ```bash
+# Create data directory with correct ownership (ndld runs as UID 10001)
+sudo mkdir -p /var/lib/ndld
+sudo chown 10001:10001 /var/lib/ndld
+
 docker run -p 443:443 \
   -e NDL_CLIENT_ID=your_client_id \
   -e NDL_CLIENT_SECRET=your_client_secret \
@@ -153,7 +162,7 @@ docker run -p 443:443 \
   -e NDLD_PORT=443 \
   -e NDLD_ACME_DOMAIN=your-domain.com \
   -e NDLD_ACME_EMAIL=admin@your-domain.com \
-  -v /var/lib/ndld/acme:/var/lib/ndld/acme \
+  -v /var/lib/ndld:/var/lib/ndld \
   ndld
 ```
 
