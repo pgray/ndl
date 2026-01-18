@@ -1,0 +1,20 @@
+services:
+  ndld:
+    image: ghcr.io/pgray/ndld:main
+    build:
+      context: .
+      dockerfile: ndld/Dockerfile
+    ports:
+      - "443:443"
+    environment:
+      - NDL_CLIENT_ID=${NDL_CLIENT_ID}
+      - NDL_CLIENT_SECRET=${NDL_CLIENT_SECRET}
+      - NDLD_PUBLIC_URL=${NDLD_PUBLIC_URL}
+      - NDLD_PORT=443
+      - NDLD_ACME_DOMAIN=${NDLD_ACME_DOMAIN}
+      - NDLD_ACME_EMAIL=${NDLD_ACME_EMAIL}
+      - NDLD_ACME_DIR=/var/lib/ndld/acme
+    volumes:
+      # Ensure host dir has correct ownership: sudo chown -R 10001:10001 /ndld-data
+      - /ndld-data:/var/lib/ndld
+    restart: unless-stopped
