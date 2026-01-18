@@ -1,5 +1,6 @@
 services:
   ndld:
+    image: ghcr.io/pgray/ndld:main
     build:
       context: .
       dockerfile: ndld/Dockerfile
