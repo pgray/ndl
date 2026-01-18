@@ -1,4 +1,5 @@
 use crate::api::{ReplyThread, Thread, ThreadsClient};
+use tracing::{debug, error, info};
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -389,6 +390,7 @@ q            Quit
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
                 AppEvent::ThreadsUpdated(threads) => {
+                    debug!("Threads updated: {} threads", threads.len());
                     self.threads = threads;
                     if self.list_state.selected().is_none() && !self.threads.is_empty() {
                         self.list_state.select(Some(0));
@@ -396,24 +398,38 @@ q            Quit
                     self.status_message = Some("Refreshed".to_string());
                 }
                 AppEvent::ReplyResult(result) => match result {
-                    Ok(()) => self.status_message = Some("Reply sent!".to_string()),
-                    Err(e) => self.status_message = Some(format!("Error: {}", e)),
+                    Ok(()) => {
+                        info!("Reply sent successfully");
+                        self.status_message = Some("Reply sent!".to_string());
+                    }
+                    Err(ref e) => {
+                        error!("Reply failed: {}", e);
+                        self.status_message = Some(format!("Error: {}", e));
+                    }
                 },
                 AppEvent::PostResult(result) => {
                     match result {
                         Ok(()) => {
+                            info!("Post sent successfully");
                             self.status_message = Some("Post sent!".to_string());
                             // Refresh to show the new post
                             self.refresh_threads().await;
                         }
-                        Err(e) => self.status_message = Some(format!("Error: {}", e)),
+                        Err(ref e) => {
+                            error!("Post failed: {}", e);
+                            self.status_message = Some(format!("Error: {}", e));
+                        }
                     }
                 }
                 AppEvent::RepliesLoaded(thread_id, result) => {
-                    self.loaded_replies_for = Some(thread_id);
+                    self.loaded_replies_for = Some(thread_id.clone());
                     match result {
-                        Ok(replies) => self.selected_replies = replies,
-                        Err(e) => {
+                        Ok(replies) => {
+                            debug!("Loaded {} replies for thread {}", replies.len(), thread_id);
+                            self.selected_replies = replies;
+                        }
+                        Err(ref e) => {
+                            error!("Failed to load replies for {}: {}", thread_id, e);
                             self.selected_replies = Vec::new();
                             self.status_message = Some(format!("Replies: {}", e));
                         }
@@ -521,6 +537,7 @@ q            Quit
             let client = self.client.clone();
             let tx = self.event_tx.clone();
 
+            info!("Sending reply to {}", thread_id);
             self.status_message = Some("Sending reply...".to_string());
 
             tokio::spawn(async move {
@@ -536,6 +553,7 @@ q            Quit
 
     async fn send_post(&mut self) {
         let text = self.input_buffer.clone();
+        info!("Sending new post");
         let client = self.client.clone();
         let tx = self.event_tx.clone();
 
@@ -552,13 +570,16 @@ q            Quit
     }
 
     async fn refresh_threads(&mut self) {
+        debug!("Refreshing threads");
         self.status_message = Some("Refreshing...".to_string());
         match self.client.get_threads(Some(25)).await {
             Ok(resp) => {
+                debug!("Refreshed: {} threads", resp.data.len());
                 self.threads = resp.data;
                 self.status_message = Some("Refreshed".to_string());
             }
             Err(e) => {
+                error!("Refresh failed: {}", e);
                 self.status_message = Some(format!("Refresh failed: {}", e));
             }
         }

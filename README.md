@@ -173,6 +173,8 @@ docker run -p 443:443 \
 
 The server exposes:
 - `GET /` - Landing page with project info
+- `GET /privacy-policy` - Privacy policy
+- `GET /tos` - Terms of service
 - `POST /auth/start` - Start OAuth session
 - `GET /auth/callback` - OAuth callback (configure in Threads app)
 - `GET /auth/poll/{session_id}` - Poll for auth completion
@@ -212,6 +214,10 @@ ndl
 - [x] Auto-refresh (15s)
 - [ ] Like/repost actions
 - [ ] Media preview (images)
+
+## Privacy
+
+ndl and ndld do not track, collect, or store any personal information. See [PRIVACY.md](PRIVACY.md) for details.
 
 ## License
 

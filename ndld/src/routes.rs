@@ -191,6 +191,19 @@ pub async fn index() -> Markup {
                         }
                     }
 
+                    div.about {
+                        h2 { "Privacy" }
+                        p {
+                            "We don't track, collect, or store any personal information. "
+                            "Access tokens are returned directly to your client and never stored server-side. "
+                            a href="/privacy-policy" { "Read our privacy policy" }
+                            "."
+                        }
+                        p {
+                            a href="/tos" { "Terms of Service" }
+                        }
+                    }
+
                     div.deps {
                         h2 { "Built with ❤️ using" }
                         ul {
@@ -286,10 +299,175 @@ const LANDING_CSS: &str = r#"
     }
 "#;
 
+/// GET /privacy-policy - Privacy policy page
+pub async fn privacy_policy() -> Markup {
+    html! {
+        (DOCTYPE)
+        html lang="en" {
+            head {
+                meta charset="utf-8";
+                meta name="viewport" content="width=device-width, initial-scale=1";
+                title { "Privacy Policy - ndld" }
+                style { (LANDING_CSS) }
+            }
+            body {
+                div.container {
+                    h1 { "Privacy Policy" }
+                    p.tagline { "ndl and ndld" }
+
+                    div.about {
+                        h2 { "What we don't do" }
+                        ul {
+                            li { "We don't collect analytics or usage data" }
+                            li { "We don't track users" }
+                            li { "We don't store access tokens on the server" }
+                            li { "We don't log IP addresses or user agents" }
+                            li { "We don't use cookies" }
+                            li { "We don't share any data with third parties" }
+                        }
+                    }
+
+                    div.about {
+                        h2 { "What happens during authentication" }
+                        p { "When you use ndld to authenticate:" }
+                        ol {
+                            li { "You're redirected to Threads (threads.net) to authorize the app" }
+                            li { "Threads sends an authorization code back to ndld" }
+                            li { "ndld exchanges that code for an access token" }
+                            li { "The token is immediately returned to your local ndl client" }
+                            li { "ndld discards the token - nothing is stored server-side" }
+                        }
+                        p {
+                            "Your access token is only stored locally on your machine in "
+                            code { "~/.config/ndl/config.toml" }
+                            "."
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Data deletion" }
+                        p {
+                            "Since we don't store any data, there's nothing to delete. "
+                            "You can revoke ndl's access to your Threads account at any time through your Threads settings."
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Contact" }
+                        p {
+                            "Questions? Open an issue at "
+                            a href="https://github.com/pgray/ndl" { "github.com/pgray/ndl" }
+                        }
+                    }
+
+                    div.links {
+                        a.button href="/" { "Back to home" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// GET /tos - Terms of Service page
+pub async fn tos() -> Markup {
+    html! {
+        (DOCTYPE)
+        html lang="en" {
+            head {
+                meta charset="utf-8";
+                meta name="viewport" content="width=device-width, initial-scale=1";
+                title { "Terms of Service - ndld" }
+                style { (LANDING_CSS) }
+            }
+            body {
+                div.container {
+                    h1 { "Terms of Service" }
+                    p.tagline { "ndl and ndld" }
+
+                    div.about {
+                        h2 { "Agreement" }
+                        p {
+                            "By using ndl or ndld, you agree to these terms. "
+                            "If you don't agree, don't use the service."
+                        }
+                    }
+
+                    div.about {
+                        h2 { "What ndl/ndld does" }
+                        ul {
+                            li { strong { "ndl" } " is a terminal client for viewing and interacting with Threads" }
+                            li { strong { "ndld" } " is an OAuth authentication server that helps ndl connect to your Threads account" }
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Your responsibilities" }
+                        ul {
+                            li { "You must have a valid Threads account" }
+                            li { "You're responsible for keeping your access token secure" }
+                            li { "Don't use ndl/ndld for spam, harassment, or anything that violates Threads' terms of service" }
+                            li { "Don't attempt to abuse, overload, or attack the ndld server" }
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Our responsibilities" }
+                        ul {
+                            li { "We provide ndl and ndld \"as is\" with no warranties" }
+                            li { "We don't guarantee uptime or availability of the ndld server" }
+                            li { "We're not responsible for any content you post through ndl" }
+                            li { "We're not affiliated with Meta or Threads" }
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Limitations" }
+                        ul {
+                            li { "ndl/ndld are provided free of charge" }
+                            li { "We may discontinue the service at any time" }
+                            li { "We may block access to users who abuse the service" }
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Intellectual property" }
+                        ul {
+                            li { "ndl and ndld are open source under the MIT license" }
+                            li { "Threads is a trademark of Meta Platforms, Inc." }
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Changes" }
+                        p {
+                            "We may update these terms. Continued use means you accept the new terms."
+                        }
+                    }
+
+                    div.about {
+                        h2 { "Contact" }
+                        p {
+                            "Questions? Open an issue at "
+                            a href="https://github.com/pgray/ndl" { "github.com/pgray/ndl" }
+                        }
+                    }
+
+                    div.links {
+                        a.button href="/" { "Back to home" }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Build the router
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(index))
+        .route("/privacy-policy", get(privacy_policy))
+        .route("/tos", get(tos))
         .route("/auth/start", post(start_auth))
         .route("/auth/callback", get(auth_callback))
         .route("/auth/poll/{session_id}", get(poll_auth))
