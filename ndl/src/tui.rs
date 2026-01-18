@@ -1,15 +1,15 @@
 use crate::api::{ReplyThread, Thread, ThreadsClient};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    DefaultTerminal, Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Line,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
-    DefaultTerminal, Frame,
 };
 use std::io::{self, stdout};
 use tokio::sync::mpsc;
@@ -338,7 +338,11 @@ q            Quit
                         for reply in replies {
                             let user = reply.thread.username.as_deref().unwrap_or("unknown");
                             let text = reply.thread.text.as_deref().unwrap_or("[no text]");
-                            let marker = if selected == Some(*counter) { "> " } else { "  " };
+                            let marker = if selected == Some(*counter) {
+                                "> "
+                            } else {
+                                "  "
+                            };
                             out.push_str(&format!("\n{}{}@{}: {}\n", marker, prefix, user, text));
                             *counter += 1;
                             if !reply.replies.is_empty() {
@@ -347,7 +351,13 @@ q            Quit
                         }
                     }
                     let mut counter = 0;
-                    format_replies(&self.selected_replies, 0, &mut content, &mut counter, selected_idx);
+                    format_replies(
+                        &self.selected_replies,
+                        0,
+                        &mut content,
+                        &mut counter,
+                        selected_idx,
+                    );
                 } else if self.loaded_replies_for.as_ref() == Some(&thread.id) {
                     content.push_str("\n\n--- No replies ---");
                 } else {
@@ -385,12 +395,10 @@ q            Quit
                     }
                     self.status_message = Some("Refreshed".to_string());
                 }
-                AppEvent::ReplyResult(result) => {
-                    match result {
-                        Ok(()) => self.status_message = Some("Reply sent!".to_string()),
-                        Err(e) => self.status_message = Some(format!("Error: {}", e)),
-                    }
-                }
+                AppEvent::ReplyResult(result) => match result {
+                    Ok(()) => self.status_message = Some("Reply sent!".to_string()),
+                    Err(e) => self.status_message = Some(format!("Error: {}", e)),
+                },
                 AppEvent::PostResult(result) => {
                     match result {
                         Ok(()) => {
@@ -425,7 +433,9 @@ q            Quit
                     self.status_message = None;
 
                     match self.input_mode {
-                        InputMode::Replying | InputMode::Posting => self.handle_input_mode(key.code).await,
+                        InputMode::Replying | InputMode::Posting => {
+                            self.handle_input_mode(key.code).await
+                        }
                         InputMode::Normal => self.handle_normal_input(key.code).await,
                     }
                 }
@@ -516,7 +526,9 @@ q            Quit
             tokio::spawn(async move {
                 let result = client.reply_to_thread(&thread_id, &text).await;
                 let _ = tx
-                    .send(AppEvent::ReplyResult(result.map(|_| ()).map_err(|e| e.to_string())))
+                    .send(AppEvent::ReplyResult(
+                        result.map(|_| ()).map_err(|e| e.to_string()),
+                    ))
                     .await;
             });
         }
@@ -532,7 +544,9 @@ q            Quit
         tokio::spawn(async move {
             let result = client.post_thread(&text).await;
             let _ = tx
-                .send(AppEvent::PostResult(result.map(|_| ()).map_err(|e| e.to_string())))
+                .send(AppEvent::PostResult(
+                    result.map(|_| ()).map_err(|e| e.to_string()),
+                ))
                 .await;
         });
     }
@@ -565,7 +579,8 @@ q            Quit
                     self.reply_selection = None;
 
                     tokio::spawn(async move {
-                        let result = client.get_thread_replies_nested(&thread_id, 2) // 2 levels deep
+                        let result = client
+                            .get_thread_replies_nested(&thread_id, 2) // 2 levels deep
                             .await
                             .map_err(|e| e.to_string());
                         let _ = tx.send(AppEvent::RepliesLoaded(thread_id, result)).await;
@@ -647,9 +662,9 @@ q            Quit
 
     /// Count total flattened replies
     fn count_replies(replies: &[ReplyThread]) -> usize {
-        replies.iter().fold(0, |acc, r| {
-            acc + 1 + Self::count_replies(&r.replies)
-        })
+        replies
+            .iter()
+            .fold(0, |acc, r| acc + 1 + Self::count_replies(&r.replies))
     }
 
     /// Get the reply ID at the given flattened index

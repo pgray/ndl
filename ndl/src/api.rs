@@ -1,8 +1,8 @@
+use futures::future::join_all;
 use reqwest::Client;
 use serde::Deserialize;
-use thiserror::Error;
 use std::sync::Arc;
-use futures::future::join_all;
+use thiserror::Error;
 
 const BASE_URL: &str = "https://graph.threads.net";
 
@@ -171,34 +171,56 @@ impl ThreadsClient {
     }
 
     /// Get replies to a thread with nested replies (recursive)
-    pub async fn get_thread_replies_nested(&self, thread_id: &str, depth: u8) -> Result<Vec<ReplyThread>, ApiError> {
+    pub async fn get_thread_replies_nested(
+        &self,
+        thread_id: &str,
+        depth: u8,
+    ) -> Result<Vec<ReplyThread>, ApiError> {
         let replies_resp = self.get_thread_replies(thread_id).await?;
 
         if depth == 0 || replies_resp.data.is_empty() {
-            return Ok(replies_resp.data.into_iter().map(|t| ReplyThread {
-                thread: t,
-                replies: Vec::new(),
-            }).collect());
+            return Ok(replies_resp
+                .data
+                .into_iter()
+                .map(|t| ReplyThread {
+                    thread: t,
+                    replies: Vec::new(),
+                })
+                .collect());
         }
 
         // Fetch nested replies in parallel
-        let nested_futures: Vec<_> = replies_resp.data.iter().map(|reply| {
-            let client = self.clone();
-            let reply_id = reply.id.clone();
-            async move {
-                client.get_thread_replies_nested(&reply_id, depth - 1).await.unwrap_or_default()
-            }
-        }).collect();
+        let nested_futures: Vec<_> = replies_resp
+            .data
+            .iter()
+            .map(|reply| {
+                let client = self.clone();
+                let reply_id = reply.id.clone();
+                async move {
+                    client
+                        .get_thread_replies_nested(&reply_id, depth - 1)
+                        .await
+                        .unwrap_or_default()
+                }
+            })
+            .collect();
 
         let nested_results = join_all(nested_futures).await;
 
-        Ok(replies_resp.data.into_iter().zip(nested_results).map(|(thread, replies)| {
-            ReplyThread { thread, replies }
-        }).collect())
+        Ok(replies_resp
+            .data
+            .into_iter()
+            .zip(nested_results)
+            .map(|(thread, replies)| ReplyThread { thread, replies })
+            .collect())
     }
 
     /// Create a reply to a thread (two-step: create container, then publish)
-    pub async fn reply_to_thread(&self, reply_to_id: &str, text: &str) -> Result<PublishResponse, ApiError> {
+    pub async fn reply_to_thread(
+        &self,
+        reply_to_id: &str,
+        text: &str,
+    ) -> Result<PublishResponse, ApiError> {
         // Step 1: Create container
         let container_url = format!(
             "{}/me/threads?media_type=TEXT&text={}&reply_to_id={}&access_token={}",
@@ -212,7 +234,10 @@ impl ThreadsClient {
 
         if !response.status().is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(ApiError::Api(format!("Container creation failed: {}", body)));
+            return Err(ApiError::Api(format!(
+                "Container creation failed: {}",
+                body
+            )));
         }
 
         let container: ContainerResponse = response.json().await?;
@@ -247,7 +272,10 @@ impl ThreadsClient {
 
         if !response.status().is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(ApiError::Api(format!("Container creation failed: {}", body)));
+            return Err(ApiError::Api(format!(
+                "Container creation failed: {}",
+                body
+            )));
         }
 
         let container: ContainerResponse = response.json().await?;
@@ -286,7 +314,9 @@ impl ThreadsClient {
                 let body: serde_json::Value = response.json().await?;
                 match body.get("status").and_then(|s| s.as_str()) {
                     Some("FINISHED") | None => return Ok(()), // No status = ready for text posts
-                    Some("ERROR") => return Err(ApiError::Api("Container processing failed".to_string())),
+                    Some("ERROR") => {
+                        return Err(ApiError::Api("Container processing failed".to_string()));
+                    }
                     Some("EXPIRED") => return Err(ApiError::Api("Container expired".to_string())),
                     Some(_) => continue, // IN_PROGRESS, keep waiting
                 }
