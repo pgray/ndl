@@ -11,6 +11,9 @@ use std::sync::Arc;
 
 use crate::auth::{AuthState, OAuthConfig, SessionStore};
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const GIT_VERSION: &str = env!("NDLD_GIT_VERSION");
+
 #[derive(Clone)]
 pub struct AppState {
     pub sessions: SessionStore,
@@ -146,9 +149,20 @@ pub async fn poll_auth(
     Ok(Json(PollResponse { state: auth_state }))
 }
 
-/// GET /health - Health check
-pub async fn health() -> &'static str {
-    "ok"
+/// GET /health - Health check with version info
+pub async fn health() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok",
+        version: VERSION,
+        git: GIT_VERSION,
+    })
+}
+
+#[derive(Serialize)]
+pub struct HealthResponse {
+    pub status: &'static str,
+    pub version: &'static str,
+    pub git: &'static str,
 }
 
 /// GET / - Landing page
@@ -217,6 +231,11 @@ pub async fn index() -> Markup {
                             li { "❤️ " a href="https://github.com/tokio-rs/tracing" { "tracing" } " - logging" }
                             li { "❤️ " a href="https://github.com/rustls/rustls" { "rustls" } " - TLS" }
                         }
+                    }
+
+                    footer.version {
+                        "ndld " (VERSION) " (" (GIT_VERSION) ") · "
+                        a href="https://github.com/pgray/ndl/blob/main/LICENSE" { "MIT License" }
                     }
                 }
             }
@@ -296,6 +315,16 @@ const LANDING_CSS: &str = r#"
     }
     li a:hover {
         text-decoration: underline;
+    }
+    .version {
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        color: #666;
+        font-size: 0.85rem;
+    }
+    .version a {
+        color: #888;
     }
 "#;
 

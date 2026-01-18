@@ -13,17 +13,21 @@ This file provides context for AI assistants working on this codebase.
 
 ```
 ndl/
-├── Cargo.toml           # Workspace manifest
+├── Cargo.toml           # Workspace manifest (shared version here)
+├── .cargo/config.toml   # Linker config (wild on Linux)
 ├── ndl/                 # TUI client
 │   ├── Cargo.toml
+│   ├── build.rs         # Embeds git version at compile time
 │   └── src/
-│       ├── main.rs      # Entry point, CLI commands (login/logout)
+│       ├── main.rs      # Entry point, CLI commands (login/logout/--version)
 │       ├── config.rs    # Config file handling (~/.config/ndl/config.toml)
 │       ├── oauth.rs     # OAuth flows (local + hosted)
 │       ├── api.rs       # Threads API client
 │       └── tui.rs       # Ratatui-based terminal UI
 └── ndld/                # OAuth server
     ├── Cargo.toml
+    ├── build.rs         # Embeds git version at compile time
+    ├── Dockerfile
     └── src/
         ├── main.rs      # Server entry point
         ├── auth.rs      # Session management (DashMap with TTL)
@@ -37,6 +41,11 @@ ndl/
 - **HTTP Client**: reqwest with rustls
 - **Async Runtime**: tokio
 - **Serialization**: serde + serde_json, toml for config
+- **Linker**: wild (Linux) - configured in `.cargo/config.toml`
+
+## Versioning
+
+Version is defined once in workspace `Cargo.toml` under `[workspace.package]`. Both binaries inherit it via `version.workspace = true`. Git tag/hash is embedded at compile time via `build.rs`.
 
 ## Build Commands
 

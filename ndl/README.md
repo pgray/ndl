@@ -44,6 +44,8 @@ cd ndl
 cargo build --release --workspace
 ```
 
+On Linux, the build uses [wild](https://github.com/davidlattimore/wild) linker for faster builds. Install with `cargo install wild-linker` and ensure `clang` is available.
+
 ## Configuration
 
 needle requires a Threads API access token. See [OAUTH.md](OAUTH.md) for detailed setup instructions.
@@ -85,6 +87,12 @@ ndl login
 
 ```bash
 ndl logout
+```
+
+### Version
+
+```bash
+ndl --version
 ```
 
 Config is stored at `~/.config/ndl/config.toml`.
