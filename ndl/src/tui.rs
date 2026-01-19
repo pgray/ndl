@@ -442,19 +442,16 @@ q            Quit
         self.maybe_load_replies();
 
         // Handle keyboard
-        if event::poll(std::time::Duration::from_millis(16))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    // Clear status on any key
-                    self.status_message = None;
+        if event::poll(std::time::Duration::from_millis(16))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            // Clear status on any key
+            self.status_message = None;
 
-                    match self.input_mode {
-                        InputMode::Replying | InputMode::Posting => {
-                            self.handle_input_mode(key.code).await
-                        }
-                        InputMode::Normal => self.handle_normal_input(key.code).await,
-                    }
-                }
+            match self.input_mode {
+                InputMode::Replying | InputMode::Posting => self.handle_input_mode(key.code).await,
+                InputMode::Normal => self.handle_normal_input(key.code).await,
             }
         }
         Ok(())
@@ -586,28 +583,26 @@ q            Quit
     }
 
     fn maybe_load_replies(&mut self) {
-        if let Some(idx) = self.list_state.selected() {
-            if let Some(thread) = self.threads.get(idx) {
-                // Check if we already loaded replies for this thread
-                if self.loaded_replies_for.as_ref() != Some(&thread.id) {
-                    let thread_id = thread.id.clone();
-                    let client = self.client.clone();
-                    let tx = self.event_tx.clone();
+        if let Some(idx) = self.list_state.selected()
+            && let Some(thread) = self.threads.get(idx)
+            && self.loaded_replies_for.as_ref() != Some(&thread.id)
+        {
+            let thread_id = thread.id.clone();
+            let client = self.client.clone();
+            let tx = self.event_tx.clone();
 
-                    // Clear old replies while loading
-                    self.selected_replies.clear();
-                    self.loaded_replies_for = None;
-                    self.reply_selection = None;
+            // Clear old replies while loading
+            self.selected_replies.clear();
+            self.loaded_replies_for = None;
+            self.reply_selection = None;
 
-                    tokio::spawn(async move {
-                        let result = client
-                            .get_thread_replies_nested(&thread_id, 2) // 2 levels deep
-                            .await
-                            .map_err(|e| e.to_string());
-                        let _ = tx.send(AppEvent::RepliesLoaded(thread_id, result)).await;
-                    });
-                }
-            }
+            tokio::spawn(async move {
+                let result = client
+                    .get_thread_replies_nested(&thread_id, 2) // 2 levels deep
+                    .await
+                    .map_err(|e| e.to_string());
+                let _ = tx.send(AppEvent::RepliesLoaded(thread_id, result)).await;
+            });
         }
     }
 
