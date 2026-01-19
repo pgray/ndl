@@ -174,7 +174,7 @@ pub async fn login(client_id: &str, client_secret: &str) -> Result<TokenResponse
     let auth_url = config.authorization_url();
 
     println!("Opening browser for authorization...");
-    println!("If it doesn't open, visit: {}", auth_url);
+    println!("If it doesn't open, visit:\n{}", auth_url);
     println!();
     println!("Note: You may need to accept the self-signed certificate warning.");
 
@@ -275,7 +275,7 @@ pub async fn hosted_login(auth_server: &str) -> Result<TokenResponse, OAuthError
 
     // Step 2: Show auth URL to user
     println!("Opening browser for authorization...");
-    println!("If it doesn't open, visit: {}", start_resp.auth_url);
+    println!("If it doesn't open, visit:\n{}", start_resp.auth_url);
 
     // Open browser
     open::that(&start_resp.auth_url).map_err(|e| OAuthError::BrowserOpen(e.to_string()))?;
