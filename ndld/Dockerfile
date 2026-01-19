@@ -15,6 +15,7 @@ COPY .cargo .cargo
 COPY Cargo.toml Cargo.lock ./
 COPY ndl ndl
 COPY ndld ndld
+COPY ndl-core ndl-core
 
 # Build static release binary with wild linker
 RUN cargo build --release --target x86_64-unknown-linux-musl -p ndld
