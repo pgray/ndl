@@ -2,7 +2,8 @@ use serde::Deserialize;
 use thiserror::Error;
 
 pub const TOKEN_URL: &str = "https://graph.threads.net/oauth/access_token";
-pub const OAUTH_SCOPES: &str = "threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish";
+pub const OAUTH_SCOPES: &str =
+    "threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish";
 
 #[derive(Debug, Deserialize)]
 pub struct TokenResponse {

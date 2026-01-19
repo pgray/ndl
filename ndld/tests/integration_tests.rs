@@ -26,7 +26,12 @@ async fn test_health_endpoint() {
     let app = create_router(state);
 
     let response = app
-        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -109,7 +114,7 @@ async fn test_poll_pending_session() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri(&format!("/auth/poll/{}", session_id))
+                .uri(format!("/auth/poll/{}", session_id))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -214,7 +219,7 @@ async fn test_callback_oauth_error() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri(&format!(
+                .uri(format!(
                     "/auth/callback?error=access_denied&error_description=User%20denied%20access&state={}",
                     session_id
                 ))
@@ -238,7 +243,7 @@ async fn test_callback_oauth_error() {
     let poll_response = app
         .oneshot(
             Request::builder()
-                .uri(&format!("/auth/poll/{}", session_id))
+                .uri(format!("/auth/poll/{}", session_id))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -251,7 +256,12 @@ async fn test_callback_oauth_error() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(json["status"], "failed");
-    assert!(json["error"].as_str().unwrap().contains("User denied access"));
+    assert!(
+        json["error"]
+            .as_str()
+            .unwrap()
+            .contains("User denied access")
+    );
 }
 
 #[tokio::test]

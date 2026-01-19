@@ -1,3 +1,3 @@
 mod oauth;
 
-pub use oauth::{TokenResponse, exchange_code, TokenExchangeError, OAUTH_SCOPES, TOKEN_URL};
+pub use oauth::{OAUTH_SCOPES, TOKEN_URL, TokenExchangeError, TokenResponse, exchange_code};

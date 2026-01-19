@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub use ndl_core::TokenResponse;
 use ndl_core::OAUTH_SCOPES;
+pub use ndl_core::TokenResponse;
 
 const SESSION_TTL: Duration = Duration::from_secs(300); // 5 minutes
 
@@ -39,9 +39,21 @@ impl AuthSession {
     }
 }
 
+impl Default for AuthSession {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone)]
 pub struct SessionStore {
     sessions: Arc<DashMap<String, Arc<AuthSession>>>,
+}
+
+impl Default for SessionStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SessionStore {

@@ -7,8 +7,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-pub use ndl_core::TokenResponse;
 use ndl_core::OAUTH_SCOPES;
+pub use ndl_core::TokenResponse;
 
 const OAUTH_PORT: u16 = 1337;
 
@@ -45,9 +45,14 @@ impl OAuthConfig {
 
     /// Exchange an authorization code for an access token
     pub async fn exchange_code(&self, code: &str) -> Result<TokenResponse, OAuthError> {
-        ndl_core::exchange_code(&self.client_id, &self.client_secret, &self.redirect_uri, code)
-            .await
-            .map_err(|e| OAuthError::TokenExchange(e.to_string()))
+        ndl_core::exchange_code(
+            &self.client_id,
+            &self.client_secret,
+            &self.redirect_uri,
+            code,
+        )
+        .await
+        .map_err(|e| OAuthError::TokenExchange(e.to_string()))
     }
 }
 

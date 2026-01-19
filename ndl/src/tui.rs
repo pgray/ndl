@@ -1,5 +1,4 @@
 use crate::api::{ReplyThread, Thread, ThreadsClient};
-use tracing::{debug, error, info};
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -14,6 +13,7 @@ use ratatui::{
 };
 use std::io::{self, stdout};
 use tokio::sync::mpsc;
+use tracing::{debug, error, info};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Panel {

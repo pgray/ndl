@@ -221,5 +221,5 @@ fn is_auth_error(error: &str) -> bool {
         || error_lower.contains("token has expired")
         || error_lower.contains("requires the threads_")  // permission errors
         || error.contains("\"code\":190")  // Facebook/Meta invalid token code
-        || error.contains("\"code\":102")  // Session expired
+        || error.contains("\"code\":102") // Session expired
 }
