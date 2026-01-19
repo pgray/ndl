@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: rm -f .cargo/config.toml
       - run: cargo check --workspace --all-targets
 
   fmt:
@@ -40,6 +41,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - run: rm -f .cargo/config.toml
       - run: cargo clippy --workspace --all-targets
 
   test:
@@ -49,6 +51,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: rm -f .cargo/config.toml
       - run: cargo test --workspace
 
   integration:
@@ -58,4 +61,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: rm -f .cargo/config.toml
       - run: cargo test --package ndld --test integration_tests
