@@ -5,8 +5,10 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+pub use ndl_core::TokenResponse;
+use ndl_core::OAUTH_SCOPES;
+
 const SESSION_TTL: Duration = Duration::from_secs(300); // 5 minutes
-const TOKEN_URL: &str = "https://graph.threads.net/oauth/access_token";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -70,13 +72,6 @@ impl SessionStore {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct TokenResponse {
-    pub access_token: String,
-    #[allow(dead_code)]
-    pub user_id: u64,
-}
-
 #[derive(Clone)]
 pub struct OAuthConfig {
     pub client_id: String,
@@ -91,43 +86,20 @@ impl OAuthConfig {
 
     pub fn authorization_url(&self, state: &str) -> String {
         format!(
-            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish&response_type=code&state={}",
+            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope={}&response_type=code&state={}",
             self.client_id,
             urlencoding::encode(&self.redirect_uri()),
+            OAUTH_SCOPES,
             state
         )
     }
 
     /// Exchange an authorization code for an access token
     pub async fn exchange_code(&self, code: &str) -> Result<TokenResponse, String> {
-        let client = reqwest::Client::new();
         let redirect_uri = self.redirect_uri();
-
-        let params = [
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", redirect_uri.as_str()),
-            ("code", code),
-        ];
-
-        let response = client
-            .post(TOKEN_URL)
-            .form(&params)
-            .send()
+        ndl_core::exchange_code(&self.client_id, &self.client_secret, &redirect_uri, code)
             .await
-            .map_err(|e| format!("Request failed: {}", e))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(format!("HTTP {}: {}", status, body));
-        }
-
-        response
-            .json::<TokenResponse>()
-            .await
-            .map_err(|e| format!("Parse error: {}", e))
+            .map_err(|e| e.to_string())
     }
 }
 

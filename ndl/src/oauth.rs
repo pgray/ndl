@@ -7,8 +7,10 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
+pub use ndl_core::TokenResponse;
+use ndl_core::OAUTH_SCOPES;
+
 const OAUTH_PORT: u16 = 1337;
-const TOKEN_URL: &str = "https://graph.threads.net/oauth/access_token";
 
 #[derive(Debug, Deserialize)]
 pub struct CallbackParams {
@@ -23,13 +25,6 @@ pub struct OAuthConfig {
     pub redirect_uri: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct TokenResponse {
-    pub access_token: String,
-    #[allow(dead_code)]
-    pub user_id: u64,
-}
-
 impl OAuthConfig {
     pub fn new(client_id: String, client_secret: String) -> Self {
         Self {
@@ -41,42 +36,16 @@ impl OAuthConfig {
 
     pub fn authorization_url(&self) -> String {
         format!(
-            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish&response_type=code",
+            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope={}&response_type=code",
             self.client_id,
-            urlencoding::encode(&self.redirect_uri)
+            urlencoding::encode(&self.redirect_uri),
+            OAUTH_SCOPES
         )
     }
 
     /// Exchange an authorization code for an access token
     pub async fn exchange_code(&self, code: &str) -> Result<TokenResponse, OAuthError> {
-        let client = reqwest::Client::new();
-
-        let params = [
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", self.redirect_uri.as_str()),
-            ("code", code),
-        ];
-
-        let response = client
-            .post(TOKEN_URL)
-            .form(&params)
-            .send()
-            .await
-            .map_err(|e| OAuthError::TokenExchange(e.to_string()))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(OAuthError::TokenExchange(format!(
-                "HTTP {}: {}",
-                status, body
-            )));
-        }
-
-        response
-            .json::<TokenResponse>()
+        ndl_core::exchange_code(&self.client_id, &self.client_secret, &self.redirect_uri, code)
             .await
             .map_err(|e| OAuthError::TokenExchange(e.to_string()))
     }

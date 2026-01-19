@@ -1613,6 +1613,7 @@ dependencies = [
  "crossterm 0.29.0",
  "dirs",
  "futures",
+ "ndl-core",
  "open",
  "ratatui",
  "ratatui-macros",
@@ -1631,6 +1632,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndl-core"
+version = "0.1.7"
+dependencies = [
+ "reqwest",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "ndld"
 version = "0.1.7"
 dependencies = [
@@ -1638,6 +1648,7 @@ dependencies = [
  "axum-server 0.8.0",
  "dashmap",
  "maud",
+ "ndl-core",
  "reqwest",
  "rustls",
  "rustls-acme",
@@ -1645,6 +1656,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "urlencoding",
