@@ -24,14 +24,21 @@ ndl/
 │       ├── oauth.rs     # OAuth flows (local + hosted)
 │       ├── api.rs       # Threads API client
 │       └── tui.rs       # Ratatui-based terminal UI
-└── ndld/                # OAuth server
+├── ndld/                # OAuth server
+│   ├── Cargo.toml
+│   ├── build.rs         # Embeds git version at compile time
+│   ├── Dockerfile
+│   ├── tests/           # Integration tests
+│   └── src/
+│       ├── lib.rs       # Library exports for testing
+│       ├── main.rs      # Server entry point
+│       ├── auth.rs      # Session management (DashMap with TTL)
+│       └── routes.rs    # Axum HTTP handlers
+└── ndl-core/            # Shared library
     ├── Cargo.toml
-    ├── build.rs         # Embeds git version at compile time
-    ├── Dockerfile
     └── src/
-        ├── main.rs      # Server entry point
-        ├── auth.rs      # Session management (DashMap with TTL)
-        └── routes.rs    # Axum HTTP handlers
+        ├── lib.rs
+        └── oauth.rs     # Shared OAuth types and token exchange
 ```
 
 ## Key Technologies
@@ -133,8 +140,24 @@ All requests require `access_token` query parameter.
 
 ## Testing
 
-Tests are in `ndl/tests/api_tests.rs` (currently minimal).
-
 ```bash
 cargo test --workspace
 ```
+
+## Pre-commit Checklist
+
+Before committing changes, run these commands to validate:
+
+```bash
+cargo fmt --all                      # Format code
+cargo clippy --workspace --all-targets  # Lint for warnings
+cargo check --workspace              # Quick compile check
+cargo build --workspace              # Full build
+cargo test --workspace               # Run all tests
+```
+
+All commands must pass without errors. Clippy warnings should be fixed before committing.
+
+## Updating Dependencies
+
+When adding or removing significant dependencies, update the "Built with" list in `ndld/src/routes.rs` (the landing page at https://ndl.pgray.dev). This list showcases the open source libraries used by the project.

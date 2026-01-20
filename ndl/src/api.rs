@@ -1,7 +1,6 @@
 use futures::future::join_all;
 use reqwest::Client;
 use serde::Deserialize;
-use serde_json;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -15,6 +14,7 @@ pub enum ApiError {
     Api(String),
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UserProfile {
     pub id: String,
@@ -34,12 +34,14 @@ pub struct Thread {
     pub permalink: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ThreadsResponse {
     pub data: Vec<Thread>,
     pub paging: Option<Paging>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct Paging {
     pub cursors: Option<Cursors>,
@@ -47,6 +49,7 @@ pub struct Paging {
     pub previous: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct Cursors {
     pub before: Option<String>,
@@ -65,6 +68,7 @@ pub struct ReplyThread {
     pub replies: Vec<ReplyThread>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct PublishResponse {
     pub id: String,
@@ -85,6 +89,7 @@ impl ThreadsClient {
     }
 
     /// Get the authenticated user's profile
+    #[allow(dead_code)]
     pub async fn get_profile(&self) -> Result<UserProfile, ApiError> {
         let url = format!(
             "{}/me?fields=id,username,name,threads_profile_picture_url,threads_biography&access_token={}",
@@ -120,6 +125,7 @@ impl ThreadsClient {
     }
 
     /// Get replies to the authenticated user's threads
+    #[allow(dead_code)]
     pub async fn get_replies(&self, limit: Option<u32>) -> Result<ThreadsResponse, ApiError> {
         let limit = limit.unwrap_or(25);
         let url = format!(
@@ -138,6 +144,7 @@ impl ThreadsClient {
     }
 
     /// Get a specific thread by ID
+    #[allow(dead_code)]
     pub async fn get_thread(&self, thread_id: &str) -> Result<Thread, ApiError> {
         let url = format!(
             "{}/{}?fields=id,text,username,timestamp,media_type,permalink&access_token={}",

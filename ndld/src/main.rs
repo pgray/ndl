@@ -1,12 +1,10 @@
-mod auth;
-mod routes;
+use ndld::auth::{OAuthConfig, SessionStore, spawn_cleanup_task};
+use ndld::routes::{AppState, create_router};
 
-use auth::{OAuthConfig, SessionStore};
-use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
-use routes::{AppState, create_router};
-use rustls_acme::caches::DirCache;
+use axum_server::tls_rustls::RustlsConfig;
 use rustls_acme::AcmeConfig;
+use rustls_acme::caches::DirCache;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -115,7 +113,7 @@ async fn main() {
     let sessions = SessionStore::new();
 
     // Spawn cleanup task
-    auth::spawn_cleanup_task(sessions.clone());
+    spawn_cleanup_task(sessions.clone());
 
     let state = Arc::new(AppState { sessions, oauth });
 

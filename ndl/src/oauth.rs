@@ -7,8 +7,10 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
+use ndl_core::OAUTH_SCOPES;
+pub use ndl_core::TokenResponse;
+
 const OAUTH_PORT: u16 = 1337;
-const TOKEN_URL: &str = "https://graph.threads.net/oauth/access_token";
 
 #[derive(Debug, Deserialize)]
 pub struct CallbackParams {
@@ -23,13 +25,6 @@ pub struct OAuthConfig {
     pub redirect_uri: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct TokenResponse {
-    pub access_token: String,
-    #[allow(dead_code)]
-    pub user_id: u64,
-}
-
 impl OAuthConfig {
     pub fn new(client_id: String, client_secret: String) -> Self {
         Self {
@@ -41,44 +36,23 @@ impl OAuthConfig {
 
     pub fn authorization_url(&self) -> String {
         format!(
-            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope=threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish&response_type=code",
+            "https://threads.net/oauth/authorize?client_id={}&redirect_uri={}&scope={}&response_type=code",
             self.client_id,
-            urlencoding::encode(&self.redirect_uri)
+            urlencoding::encode(&self.redirect_uri),
+            OAUTH_SCOPES
         )
     }
 
     /// Exchange an authorization code for an access token
     pub async fn exchange_code(&self, code: &str) -> Result<TokenResponse, OAuthError> {
-        let client = reqwest::Client::new();
-
-        let params = [
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", self.redirect_uri.as_str()),
-            ("code", code),
-        ];
-
-        let response = client
-            .post(TOKEN_URL)
-            .form(&params)
-            .send()
-            .await
-            .map_err(|e| OAuthError::TokenExchange(e.to_string()))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(OAuthError::TokenExchange(format!(
-                "HTTP {}: {}",
-                status, body
-            )));
-        }
-
-        response
-            .json::<TokenResponse>()
-            .await
-            .map_err(|e| OAuthError::TokenExchange(e.to_string()))
+        ndl_core::exchange_code(
+            &self.client_id,
+            &self.client_secret,
+            &self.redirect_uri,
+            code,
+        )
+        .await
+        .map_err(|e| OAuthError::TokenExchange(e.to_string()))
     }
 }
 
@@ -160,8 +134,6 @@ pub enum OAuthError {
     ServerShutdown,
     #[error("Token exchange failed: {0}")]
     TokenExchange(String),
-    #[error("Failed to open browser: {0}")]
-    BrowserOpen(String),
     #[error("Hosted auth error: {0}")]
     HostedAuth(String),
     #[error("Auth session timeout")]
@@ -174,12 +146,14 @@ pub async fn login(client_id: &str, client_secret: &str) -> Result<TokenResponse
     let auth_url = config.authorization_url();
 
     println!("Opening browser for authorization...");
-    println!("If it doesn't open, visit: {}", auth_url);
+    println!("If it doesn't open, visit:\n{}", auth_url);
     println!();
     println!("Note: You may need to accept the self-signed certificate warning.");
 
-    // Open browser
-    open::that(&auth_url).map_err(|e| OAuthError::BrowserOpen(e.to_string()))?;
+    // Open browser (don't fail if it doesn't work - user can visit URL manually)
+    if let Err(e) = open::that(&auth_url) {
+        eprintln!("Could not open browser automatically: {}", e);
+    }
 
     // Wait for callback
     println!("Waiting for authorization...");
@@ -275,10 +249,12 @@ pub async fn hosted_login(auth_server: &str) -> Result<TokenResponse, OAuthError
 
     // Step 2: Show auth URL to user
     println!("Opening browser for authorization...");
-    println!("If it doesn't open, visit: {}", start_resp.auth_url);
+    println!("If it doesn't open, visit:\n{}", start_resp.auth_url);
 
-    // Open browser
-    open::that(&start_resp.auth_url).map_err(|e| OAuthError::BrowserOpen(e.to_string()))?;
+    // Open browser (don't fail if it doesn't work - user can visit URL manually)
+    if let Err(e) = open::that(&start_resp.auth_url) {
+        eprintln!("Could not open browser automatically: {}", e);
+    }
 
     // Step 3: Poll for completion
     println!("Waiting for authorization...");

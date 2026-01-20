@@ -205,6 +205,31 @@ pub async fn index() -> Markup {
                         }
                     }
 
+                    div.install {
+                        h2 { "Install ndl" }
+                        p {
+                            "Download a pre-built binary from "
+                            a href="https://github.com/pgray/ndl/releases" { "GitHub Releases" }
+                            ":"
+                        }
+                        ul.platforms {
+                            li { "Linux x86_64 (static)" }
+                            li { "Linux ARM64 (static)" }
+                            li { "macOS Intel" }
+                            li { "macOS Apple Silicon" }
+                        }
+                        p.note {
+                            "macOS: Remove quarantine after download: "
+                            code { "xattr -d com.apple.quarantine ./ndl" }
+                        }
+                        p { "Or install with cargo:" }
+                        pre { code { "cargo install ndl" } }
+                        p { "Or build from source:" }
+                        pre { code { "git clone https://github.com/pgray/ndl\ncd ndl\ncargo install --path ndl" } }
+                        p { "Then login:" }
+                        pre { code { "ndl login" } }
+                    }
+
                     div.about {
                         h2 { "Privacy" }
                         p {
@@ -315,6 +340,50 @@ const LANDING_CSS: &str = r#"
     }
     li a:hover {
         text-decoration: underline;
+    }
+    .install {
+        background: rgba(255,255,255,0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .platforms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        list-style: none;
+        padding: 0;
+        margin: 0.75rem 0;
+    }
+    .platforms li {
+        background: rgba(0,0,0,0.3);
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        color: #00d4aa;
+    }
+    .note {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.7);
+        margin: 0.5rem 0;
+    }
+    .note code {
+        background: rgba(0,0,0,0.3);
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+    }
+    pre {
+        background: rgba(0,0,0,0.4);
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 0.75rem 0;
+        overflow-x: auto;
+    }
+    code {
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        font-size: 0.9rem;
+        color: #00d4aa;
+        white-space: pre;
     }
     .version {
         margin-top: 2rem;
