@@ -63,3 +63,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo install wild-linker
       - run: cargo test --package ndld --test integration_tests
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ndld image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./ndld/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
