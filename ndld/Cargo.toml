@@ -44,7 +44,7 @@ urlencoding = "2"
 maud = { version = "0.27", features = ["axum"] }
 
 # Shared library
-ndl-core = { path = "../ndl-core", version = "0.1.8" }
+ndl-core = { path = "../ndl-core", version = "0.1.9" }
 
 [dev-dependencies]
 tower = "0.5"
