@@ -45,6 +45,9 @@ jobs:
           sed -i "s/ndl-core = { path = \"..\/ndl-core\", version = \".*\" }/ndl-core = { path = \"..\/ndl-core\", version = \"$VERSION\" }/" ndl/Cargo.toml
           sed -i "s/ndl-core = { path = \"..\/ndl-core\", version = \".*\" }/ndl-core = { path = \"..\/ndl-core\", version = \"$VERSION\" }/" ndld/Cargo.toml
 
+      - name: Remove local linker config
+        run: rm -f .cargo/config.toml
+
       - name: Verify build
         run: cargo check --workspace
 
