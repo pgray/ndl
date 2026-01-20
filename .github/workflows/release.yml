@@ -184,7 +184,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-linux, build-macos, publish-crates]
+    needs: [version-bump, build-linux, build-macos, publish-crates]
     runs-on: ubuntu-latest
     if: always() && needs.publish-crates.result == 'success'
     permissions:
@@ -201,5 +201,6 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version-bump.outputs.tag || github.ref_name }}
           files: artifacts/**/*.tar.gz
           generate_release_notes: true
