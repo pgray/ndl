@@ -296,7 +296,7 @@ pub async fn hosted_login(auth_server: &str) -> Result<TokenResponse, OAuthError
                 // Return a TokenResponse for compatibility
                 return Ok(TokenResponse {
                     access_token,
-                    user_id: 0, // Not provided by hosted auth
+                    user_id: 0,                          // Not provided by hosted auth
                     expires_in: Some(60 * 24 * 60 * 60), // Assume 60 days for long-lived token
                 });
             }

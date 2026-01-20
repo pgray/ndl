@@ -9,7 +9,10 @@ use maud::{DOCTYPE, Markup, html};
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use tower_governor::{GovernorLayer, errors::GovernorError, governor::GovernorConfigBuilder, key_extractor::KeyExtractor};
+use tower_governor::{
+    GovernorLayer, errors::GovernorError, governor::GovernorConfigBuilder,
+    key_extractor::KeyExtractor,
+};
 
 /// IP key extractor that falls back to a default IP instead of erroring.
 /// This handles cases where the server is behind a proxy that doesn't set
@@ -27,7 +30,11 @@ impl KeyExtractor for FallbackIpKeyExtractor {
         let ip = maybe_x_forwarded_for(headers)
             .or_else(|| maybe_x_real_ip(headers))
             .or_else(|| maybe_forwarded(headers))
-            .or_else(|| req.extensions().get::<ConnectInfo<SocketAddr>>().map(|ci| ci.0.ip()))
+            .or_else(|| {
+                req.extensions()
+                    .get::<ConnectInfo<SocketAddr>>()
+                    .map(|ci| ci.0.ip())
+            })
             .unwrap_or(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
 
         Ok(ip)
@@ -58,16 +65,15 @@ fn maybe_forwarded(headers: &HeaderMap) -> Option<IpAddr> {
         .and_then(|hv| hv.to_str().ok())
         .and_then(|s: &str| {
             // Parse "for=<ip>" from Forwarded header
-            s.split(';')
-                .find_map(|part: &str| {
-                    let part = part.trim();
-                    if part.to_lowercase().starts_with("for=") {
-                        let ip_str = part[4..].trim_matches(|c| c == '"' || c == '[' || c == ']');
-                        ip_str.parse::<IpAddr>().ok()
-                    } else {
-                        None
-                    }
-                })
+            s.split(';').find_map(|part: &str| {
+                let part = part.trim();
+                if part.to_lowercase().starts_with("for=") {
+                    let ip_str = part[4..].trim_matches(|c| c == '"' || c == '[' || c == ']');
+                    ip_str.parse::<IpAddr>().ok()
+                } else {
+                    None
+                }
+            })
         })
 }
 

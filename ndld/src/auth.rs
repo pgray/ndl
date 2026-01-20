@@ -111,9 +111,10 @@ impl OAuthConfig {
         let redirect_uri = self.redirect_uri();
 
         // First, exchange code for short-lived token
-        let short_lived = ndl_core::exchange_code(&self.client_id, &self.client_secret, &redirect_uri, code)
-            .await
-            .map_err(|e| e.to_string())?;
+        let short_lived =
+            ndl_core::exchange_code(&self.client_id, &self.client_secret, &redirect_uri, code)
+                .await
+                .map_err(|e| e.to_string())?;
 
         // Then, exchange short-lived token for long-lived token (60 days)
         ndl_core::exchange_for_long_lived_token(&self.client_secret, &short_lived.access_token)

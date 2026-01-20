@@ -70,8 +70,7 @@ pub async fn exchange_for_long_lived_token(
 
     let url = format!(
         "https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret={}&access_token={}",
-        client_secret,
-        short_lived_token
+        client_secret, short_lived_token
     );
 
     let response = client

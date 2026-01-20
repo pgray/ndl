@@ -295,7 +295,9 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     tracing::warn!("Failed to refresh token: {}", e);
-                    eprintln!("Warning: Failed to refresh Threads token. You may need to re-authenticate.");
+                    eprintln!(
+                        "Warning: Failed to refresh Threads token. You may need to re-authenticate."
+                    );
                     eprintln!("Run 'ndl login threads' if you encounter authentication errors.");
                 }
             }
