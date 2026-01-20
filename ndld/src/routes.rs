@@ -218,6 +218,10 @@ pub async fn index() -> Markup {
                             li { "macOS Intel" }
                             li { "macOS Apple Silicon" }
                         }
+                        p.note {
+                            "macOS: Remove quarantine after download: "
+                            code { "xattr -d com.apple.quarantine ./ndl" }
+                        }
                         p { "Or install with cargo:" }
                         pre { code { "cargo install ndl" } }
                         p { "Or build from source:" }
@@ -357,6 +361,16 @@ const LANDING_CSS: &str = r#"
         border-radius: 4px;
         font-size: 0.85rem;
         color: #00d4aa;
+    }
+    .note {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.7);
+        margin: 0.5rem 0;
+    }
+    .note code {
+        background: rgba(0,0,0,0.3);
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
     }
     pre {
         background: rgba(0,0,0,0.4);
