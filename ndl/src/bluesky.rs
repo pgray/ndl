@@ -3,8 +3,8 @@ use atrium_api::app::bsky::feed::defs::{ThreadViewPostData, ThreadViewPostReplie
 use atrium_api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use atrium_api::app::bsky::feed::post::{RecordData, ReplyRefData};
 use atrium_api::com::atproto::repo::strong_ref::MainData as StrongRef;
-use atrium_api::types::string::Datetime;
 use atrium_api::types::Union;
+use atrium_api::types::string::Datetime;
 use bsky_sdk::BskyAgent;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -83,10 +83,7 @@ impl BlueskyClient {
     }
 
     /// Convert a reply item (Union<ThreadViewPostRepliesItem>) to a ReplyThread
-    fn convert_reply_item(
-        &self,
-        item: &Union<ThreadViewPostRepliesItem>,
-    ) -> Option<ReplyThread> {
+    fn convert_reply_item(&self, item: &Union<ThreadViewPostRepliesItem>) -> Option<ReplyThread> {
         match item {
             Union::Refs(ThreadViewPostRepliesItem::ThreadViewPost(thread_post)) => {
                 let post_view = &thread_post.data.post;
@@ -105,14 +102,10 @@ impl BlueskyClient {
                     permalink: Some(format!(
                         "https://bsky.app/profile/{}/post/{}",
                         post_view.author.handle.as_str(),
-                        post_view
-                            .uri
-                            .to_string()
-                            .split('/')
-                            .last()
-                            .unwrap_or("")
+                        post_view.uri.to_string().split('/').last().unwrap_or("")
                     )),
                     platform: Platform::Bluesky,
+                    media_type: None,
                 };
 
                 // Recursively extract nested replies
@@ -131,7 +124,10 @@ impl BlueskyClient {
 
     /// Get the CID and root info for a post by fetching the thread
     /// Returns (cid, Option<(root_uri, root_cid)>)
-    async fn get_post_info(&self, uri: &str) -> Result<(String, Option<(String, String)>), PlatformError> {
+    async fn get_post_info(
+        &self,
+        uri: &str,
+    ) -> Result<(String, Option<(String, String)>), PlatformError> {
         let agent = self.agent.read().await;
 
         let thread = agent
@@ -282,6 +278,7 @@ impl SocialClient for BlueskyClient {
                             .unwrap_or("")
                     )),
                     platform: Platform::Bluesky,
+                    media_type: None,
                 }
             })
             .collect())
@@ -362,20 +359,21 @@ impl SocialClient for BlueskyClient {
 
         // For replies, we need both parent and root references
         // If the parent is itself a reply, use its root; otherwise parent == root
-        let (root_uri, root_cid) = root_info.unwrap_or_else(|| (post_id.to_string(), parent_cid.clone()));
+        let (root_uri, root_cid) =
+            root_info.unwrap_or_else(|| (post_id.to_string(), parent_cid.clone()));
 
         let reply_ref = ReplyRefData {
             parent: StrongRef {
-                cid: parent_cid.parse().map_err(|e| {
-                    PlatformError::Api(format!("Invalid parent CID: {}", e))
-                })?,
+                cid: parent_cid
+                    .parse()
+                    .map_err(|e| PlatformError::Api(format!("Invalid parent CID: {}", e)))?,
                 uri: post_id.to_string(),
             }
             .into(),
             root: StrongRef {
-                cid: root_cid.parse().map_err(|e| {
-                    PlatformError::Api(format!("Invalid root CID: {}", e))
-                })?,
+                cid: root_cid
+                    .parse()
+                    .map_err(|e| PlatformError::Api(format!("Invalid root CID: {}", e)))?,
                 uri: root_uri,
             }
             .into(),

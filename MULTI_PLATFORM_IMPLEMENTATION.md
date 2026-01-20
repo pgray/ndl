@@ -6,16 +6,17 @@
 
 All core and medium priority features are implemented:
 - ✅ Dual-platform support (Threads + Bluesky)
-- ✅ Platform switching with `Tab` key
+- ✅ Platform switching with `Tab` or `]` key
 - ✅ Cross-posting with `Shift+P`
 - ✅ Interactive Bluesky login (`ndl login bluesky`)
 - ✅ Platform indicators in UI
 - ✅ **Session persistence for Bluesky** (reduces re-authentication)
 - ✅ **Full post text extraction** for Bluesky timelines
+- ✅ **Bluesky replies** with proper threading (including nested replies)
+- ✅ **JSON config format** (auto-migrates from TOML)
 - ✅ Comprehensive documentation
 
-**What works:** Timeline viewing, posting, platform switching, cross-posting, session management
-**What's stubbed:** Bluesky replies (needs advanced AT Protocol type handling)
+**What works:** Timeline viewing, posting, replying, platform switching, cross-posting, session management
 
 The application is ready for daily use with full multi-platform posting and timeline features!
 
@@ -196,160 +197,26 @@ pub struct App {
    - Displays full post content in timeline
    - Handles posts with and without text correctly
 
-## What's Not Yet Done ⚠️
+## Future Enhancements (Nice to Have)
 
-### Remaining Items
-
-1. **Bluesky Reply Support** (Challenging)
-   - Requires advanced AT Protocol URI type handling
-   - The bsky-sdk may not expose all necessary type information
-   - Manual URI parsing and CID extraction would be needed
-   - Current workaround: use Bluesky web/app for replies
-
-8. **Platform-Specific Refresh**
-   - Background refresh for active platform
-   - Refresh all platforms option
-   - Platform-specific refresh intervals
-
-### Nice to Have
-
-9. **Quote Posts**
+1. **Quote Posts**
    - Threads quote functionality
    - Bluesky quote posts
    - Platform compatibility handling
 
-10. **Media Support**
-    - Image uploads
-    - Platform-specific media handling
-    - Cross-posting with media
+2. **Media Support**
+   - Image uploads
+   - Platform-specific media handling
+   - Cross-posting with media
 
-11. **Platform Features**
-    - Threads-specific: Carousels
-    - Bluesky-specific: Custom feeds, labelers
-    - Profile switching
+3. **Platform Features**
+   - Threads-specific: Carousels
+   - Bluesky-specific: Custom feeds, labelers
+   - Profile switching
 
-## How to Complete Implementation
-
-### Step 1: Wire Up Multi-Platform in Main
-
-```rust
-// In ndl/src/main.rs
-
-async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::load()?;
-
-    let mut clients: HashMap<Platform, Box<dyn SocialClient>> = HashMap::new();
-
-    // Initialize Threads if configured
-    if let Some(token) = config.access_token.clone() {
-        let client = ThreadsClient::new(token);
-        clients.insert(Platform::Threads, Box::new(client));
-    }
-
-    // Initialize Bluesky if configured
-    if let Some(bsky_config) = config.bluesky.clone() {
-        match BlueskyClient::login(&bsky_config.identifier, &bsky_config.password).await {
-            Ok(client) => {
-                clients.insert(Platform::Bluesky, Box::new(client));
-            }
-            Err(e) => {
-                eprintln!("Warning: Bluesky login failed: {}", e);
-            }
-        }
-    }
-
-    if clients.is_empty() {
-        eprintln!("No platforms configured. Run 'ndl login' or 'ndl login bluesky' first.");
-        return Ok(());
-    }
-
-    let mut app = App::new_multi_platform(clients);
-
-    // Start refresh tasks for each platform
-    for platform in app.clients.keys() {
-        app.start_platform_refresh(*platform);
-    }
-
-    app.run().await?;
-    Ok(())
-}
-```
-
-### Step 2: Add Platform Refresh
-
-```rust
-// In ndl/src/tui.rs
-
-impl App {
-    fn start_platform_refresh(&self, platform: Platform) {
-        if let Some(client) = self.clients.get(&platform) {
-            let client = client.clone();
-            let tx = self.event_tx.clone();
-
-            tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-
-                    if let Ok(posts) = client.get_posts(Some(25)).await {
-                        let _ = tx.send(AppEvent::PostsUpdated(platform, posts)).await;
-                    }
-                }
-            });
-        }
-    }
-}
-```
-
-### Step 3: Add Keybindings
-
-```rust
-// In handle_normal_input() method
-
-KeyCode::Tab => {
-    self.toggle_platform();
-}
-KeyCode::Char('P') => {  // Shift+P for cross-post
-    self.input_mode = InputMode::CrossPosting;
-    self.input_buffer.clear();
-}
-```
-
-### Step 4: Update UI Display
-
-```rust
-// In draw_threads_list() or draw_status_bar()
-
-// Show current platform
-let platform_indicator = format!(" [{}] ", self.current_platform);
-
-// Show available platforms
-let platforms: Vec<String> = self.clients.keys()
-    .map(|p| p.to_string())
-    .collect();
-let platforms_str = platforms.join(" | ");
-```
-
-## Testing Plan
-
-1. **Single Platform Tests**
-   - Test with Threads only
-   - Test with Bluesky only
-   - Verify backwards compatibility
-
-2. **Multi-Platform Tests**
-   - Test platform switching
-   - Test cross-posting
-   - Test per-platform state isolation
-
-3. **Error Handling**
-   - Test with invalid credentials
-   - Test network failures
-   - Test API errors per platform
-
-4. **Edge Cases**
-   - No platforms configured
-   - One platform fails authentication
-   - Cross-post to offline platform
+4. **Platform-Specific Refresh**
+   - Per-platform refresh intervals
+   - Refresh all platforms option
 
 ## Dependencies Added
 
@@ -364,17 +231,9 @@ atrium-api = "0.25"
 
 ## Migration Notes
 
-- **Backwards Compatible**: Existing single-platform usage still works
-- **Config Format**: Extended, but old configs remain valid
-- **API**: `App::new()` still exists for legacy code
-
-## Future Enhancements
-
-- Mastodon support
-- Twitter/X support (if API available)
-- Custom platform plugins
-- Platform-specific filters
-- Cross-platform analytics
+- **Config Format**: JSON format with TOML auto-migration
+- **API**: Single `App::new(clients)` constructor (legacy code removed)
+- **Platform State**: Per-platform state management via `PlatformState`
 
 ## Sources
 

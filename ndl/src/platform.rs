@@ -42,6 +42,8 @@ pub struct Post {
     pub timestamp: Option<String>,
     pub permalink: Option<String>,
     pub platform: Platform,
+    /// Media type (e.g., "REPOST_FACADE", "IMAGE", "VIDEO", "CAROUSEL_ALBUM")
+    pub media_type: Option<String>,
 }
 
 /// Platform-agnostic user profile

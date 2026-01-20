@@ -80,16 +80,17 @@ You'll be prompted for:
 - **Identifier**: Your handle (e.g., `user.bsky.social`) or email
 - **Password**: Your password or an [app-specific password](https://bsky.app/settings/app-passwords) (recommended)
 
-Credentials are saved to `~/.config/ndl/config.toml`:
+Credentials are saved to `~/.config/ndl/config.json`:
 
-```toml
-# Threads credentials
-access_token = "..."
-
-# Bluesky credentials
-[bluesky]
-identifier = "user.bsky.social"
-password = "your-app-password"
+```json
+{
+  "access_token": "...",
+  "bluesky": {
+    "identifier": "user.bsky.social",
+    "password": "your-app-password",
+    "session": "..."
+  }
+}
 ```
 
 ### Custom Auth Server
@@ -101,8 +102,8 @@ To use a different auth server:
 export NDL_OAUTH_ENDPOINT=https://your-ndld-server.com
 ndl login
 
-# Or add to ~/.config/ndl/config.toml:
-# auth_server = "https://your-ndld-server.com"
+# Or add to ~/.config/ndl/config.json:
+# "auth_server": "https://your-ndld-server.com"
 ```
 
 ### Local OAuth
@@ -129,7 +130,7 @@ ndl logout
 ndl --version
 ```
 
-Config is stored at `~/.config/ndl/config.toml`.
+Config is stored at `~/.config/ndl/config.json`.
 
 ## Running the Auth Server (ndld)
 
@@ -260,7 +261,7 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 | `P`         | Cross-post to all platforms     |
 | `r`         | Reply to selected thread        |
 | `R`         | Refresh feed                    |
-| `Tab`       | Switch platform (multi-platform)|
+| `Tab`/`]`   | Switch platform (multi-platform)|
 | `Enter`     | Select / focus detail           |
 | `Esc`       | Back / cancel                   |
 | `?`         | Toggle help                     |
@@ -285,7 +286,7 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 - [x] Per-platform state management
 - [x] Session persistence for Bluesky
 - [x] Full post text extraction for Bluesky
-- [ ] Bluesky reply support (needs advanced URI handling)
+- [x] Bluesky reply support with proper threading
 
 ### Future Enhancements
 - [ ] Like/repost actions

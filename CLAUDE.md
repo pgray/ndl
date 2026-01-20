@@ -4,10 +4,10 @@ This file provides context for AI assistants working on this codebase.
 
 ## Project Overview
 
-**ndl** (needle) is a minimal TUI client for Threads (threads.net). It's a Cargo workspace with two binaries:
+**ndl** (needle) is a minimal multi-platform TUI client for Threads (threads.net) and Bluesky (bsky.app). It's a Cargo workspace with two binaries:
 
-- `ndl` - The terminal UI client
-- `ndld` - OAuth authentication server
+- `ndl` - The terminal UI client (supports Threads and Bluesky)
+- `ndld` - OAuth authentication server (for Threads)
 
 ## Directory Structure
 
@@ -20,9 +20,11 @@ ndl/
 │   ├── build.rs         # Embeds git version at compile time
 │   └── src/
 │       ├── main.rs      # Entry point, CLI commands (login/logout/--version)
-│       ├── config.rs    # Config file handling (~/.config/ndl/config.toml)
+│       ├── config.rs    # Config file handling (~/.config/ndl/config.json)
 │       ├── oauth.rs     # OAuth flows (local + hosted)
 │       ├── api.rs       # Threads API client
+│       ├── bluesky.rs   # Bluesky API client (AT Protocol)
+│       ├── platform.rs  # Multi-platform abstraction (SocialClient trait)
 │       └── tui.rs       # Ratatui-based terminal UI
 ├── ndld/                # OAuth server
 │   ├── Cargo.toml
@@ -47,7 +49,8 @@ ndl/
 - **HTTP Server**: axum (both ndl for local OAuth callback, ndld for hosted auth)
 - **HTTP Client**: reqwest with rustls
 - **Async Runtime**: tokio
-- **Serialization**: serde + serde_json, toml for config
+- **Serialization**: serde + serde_json for config and API
+- **Bluesky**: bsky-sdk + atrium-api (AT Protocol)
 - **Linker**: wild (Linux) - configured in `.cargo/config.toml`
 
 ## Versioning
@@ -66,13 +69,20 @@ cargo run -p ndld                # Run the auth server
 
 ## Configuration
 
-Config file: `~/.config/ndl/config.toml`
+Config file: `~/.config/ndl/config.json`
 
-```toml
-access_token = "..."      # Threads API token (set by login)
-client_id = "..."         # For local OAuth
-client_secret = "..."     # For local OAuth
-auth_server = "..."       # Optional: URL of ndld server for hosted auth
+```json
+{
+  "access_token": "...",      // Threads API token (set by login)
+  "client_id": "...",         // For local OAuth
+  "client_secret": "...",     // For local OAuth
+  "auth_server": "...",       // Optional: URL of ndld server for hosted auth
+  "bluesky": {                // Optional: Bluesky credentials
+    "identifier": "user.bsky.social",
+    "password": "app-password",
+    "session": "..."          // Persisted session data
+  }
+}
 ```
 
 Environment variables:
@@ -89,9 +99,13 @@ Environment variables:
 
 ## Auth Flow
 
+### Threads
 By default, ndl uses hosted OAuth at `https://ndl.pgray.dev`. Set `NDL_OAUTH_ENDPOINT=""` or `auth_server = ""` in config to use local OAuth.
 
-### Local OAuth (ndl only)
+### Bluesky
+Uses username/password authentication via `ndl login bluesky`. Credentials and session data stored in config.json.
+
+### Local OAuth (ndl only, Threads)
 
 1. ndl starts HTTPS server on localhost:1337 with self-signed cert
 2. Opens browser to Threads authorization URL
@@ -123,11 +137,13 @@ All requests require `access_token` query parameter.
 
 ## TUI Architecture
 
-- `App` struct holds all state (threads, selection, input mode, etc.)
-- Two panels: threads list (left) and detail view (right)
-- Input modes: `Normal`, `Replying`, `Posting`
-- Background task refreshes threads every 15 seconds
+- `App` struct holds all state (threads, selection, input mode, platform states)
+- Two panels: posts list (left) and detail view (right)
+- Input modes: `Normal`, `Replying`, `Posting`, `CrossPosting`
+- Multi-platform support via `SocialClient` trait and `platform_states` HashMap
+- Background task refreshes posts every 15 seconds for each platform
 - Events sent via `mpsc` channel (`AppEvent` enum)
+- Platform switching with `Tab` or `]` key
 
 ## Code Conventions
 

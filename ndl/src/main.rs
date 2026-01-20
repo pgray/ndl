@@ -264,19 +264,16 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load()?;
 
     let mut clients: HashMap<Platform, Box<dyn SocialClient>> = HashMap::new();
-    let mut legacy_client = None;
-    let mut legacy_threads = Vec::new();
 
     // Initialize Threads if configured
     if config.has_threads() {
         let token = config.access_token.clone().unwrap();
         let client = ThreadsClient::new(token.clone());
 
-        // Try to fetch initial data for Threads
-        match client.get_threads(Some(25)).await {
-            Ok(resp) => {
-                tracing::debug!("Fetched {} threads from Threads", resp.data.len());
-                legacy_threads = resp.data.clone();
+        // Verify token is still valid
+        match client.get_threads(Some(1)).await {
+            Ok(_) => {
+                tracing::debug!("Threads token is valid");
                 clients.insert(Platform::Threads, Box::new(ThreadsClient::new(token)));
             }
             Err(e) if is_auth_error(&e.to_string()) => {
@@ -286,19 +283,11 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             Err(e) => {
-                tracing::error!("Failed to fetch threads from Threads: {}", e);
+                tracing::error!("Failed to connect to Threads: {}", e);
                 eprintln!("Warning: Failed to connect to Threads: {}", e);
-                // Still add the client even if fetch failed
-                clients.insert(
-                    Platform::Threads,
-                    Box::new(ThreadsClient::new(token.clone())),
-                );
-                legacy_client = Some(ThreadsClient::new(token));
+                // Still add the client - TUI will retry
+                clients.insert(Platform::Threads, Box::new(ThreadsClient::new(token)));
             }
-        }
-
-        if legacy_client.is_none() && config.has_threads() {
-            legacy_client = Some(ThreadsClient::new(config.access_token.clone().unwrap()));
         }
     }
 
@@ -364,17 +353,7 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create and run the app
     tracing::info!("Starting TUI with {} platform(s)", clients.len());
-    let mut app =
-        if clients.len() > 1 || (clients.len() == 1 && !clients.contains_key(&Platform::Threads)) {
-            // Use multi-platform mode
-            App::new_multi_platform(clients)
-        } else {
-            // Use legacy single-platform mode (Threads only)
-            let client =
-                legacy_client.unwrap_or_else(|| ThreadsClient::new(config.access_token.unwrap()));
-            App::new(client, legacy_threads)
-        };
-
+    let mut app = App::new(clients);
     app.run().await?;
     tracing::info!("TUI exited");
     Ok(())

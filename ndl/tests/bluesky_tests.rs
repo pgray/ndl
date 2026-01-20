@@ -102,8 +102,8 @@ async fn test_02_restore_session() {
     println!("=== Test: Restore session from stored data ===");
     println!("Session data length: {} bytes", session_data.len());
 
-    use bsky_sdk::agent::config::Config as BskyConfig;
     use bsky_sdk::BskyAgent;
+    use bsky_sdk::agent::config::Config as BskyConfig;
 
     // Parse the session config
     let bsky_config: Result<BskyConfig, _> = serde_json::from_str(&session_data);
@@ -172,10 +172,7 @@ async fn test_03_get_profile() {
         .bsky
         .actor
         .get_profile(
-            atrium_api::app::bsky::actor::get_profile::ParametersData {
-                actor: did.into(),
-            }
-            .into(),
+            atrium_api::app::bsky::actor::get_profile::ParametersData { actor: did.into() }.into(),
         )
         .await;
 
@@ -420,7 +417,10 @@ async fn test_07_create_post() {
         .await
         .unwrap();
 
-    let test_text = format!("Test post from ndl integration tests - {}", chrono::Utc::now());
+    let test_text = format!(
+        "Test post from ndl integration tests - {}",
+        chrono::Utc::now()
+    );
     println!("Creating post: {}", test_text);
 
     let result = agent
@@ -551,8 +551,8 @@ async fn test_09_session_roundtrip() {
 
     println!("=== Test: Session serialization round-trip ===");
 
-    use bsky_sdk::agent::config::Config as BskyConfig;
     use bsky_sdk::BskyAgent;
+    use bsky_sdk::agent::config::Config as BskyConfig;
 
     // Login fresh
     let agent = BskyAgent::builder().build().await.unwrap();

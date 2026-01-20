@@ -430,6 +430,7 @@ impl SocialClient for ThreadsClient {
                 timestamp: t.timestamp,
                 permalink: t.permalink,
                 platform: Platform::Threads,
+                media_type: t.media_type,
             })
             .collect())
     }
@@ -477,6 +478,7 @@ fn convert_reply_threads(threads: Vec<ReplyThread>) -> Vec<PlatformReplyThread> 
                 timestamp: rt.thread.timestamp,
                 permalink: rt.thread.permalink,
                 platform: Platform::Threads,
+                media_type: rt.thread.media_type,
             },
             replies: convert_reply_threads(rt.replies),
         })
