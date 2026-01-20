@@ -1,5 +1,9 @@
 # ndl - needle
 
+[![CI](https://github.com/pgray/ndl/actions/workflows/ci.yml/badge.svg)](https://github.com/pgray/ndl/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/ndl.svg)](https://crates.io/crates/ndl)
+[![GitHub Release](https://img.shields.io/github/v/release/pgray/ndl)](https://github.com/pgray/ndl/releases)
+
 A minimal multi-platform TUI client for [Threads](https://threads.net) and [Bluesky](https://bsky.app) - stay aware of notifications without the distractions of a full social media interface.
 
 ![ndl screenshot](https://raw.githubusercontent.com/pgray/ndl/main/ndl/pics/srug.png)
@@ -36,6 +40,8 @@ This is a Cargo workspace with two binaries and a shared library:
 
 ## Installation
 
+**[Latest Release](https://github.com/pgray/ndl/releases)**
+
 ```bash
 cargo install ndl
 ```
@@ -48,7 +54,9 @@ cd ndl
 cargo build --release --workspace
 ```
 
-On Linux, the build uses [wild](https://github.com/davidlattimore/wild) linker for faster builds. Install with `cargo install wild-linker` and ensure `clang` is available.
+On Linux, the build uses [wild](https://github.com/davidlattimore/wild) linker for faster builds.
+
+Install with `cargo install wild-linker` and ensure `clang` is available.
 
 ## Configuration
 
@@ -77,6 +85,7 @@ ndl login bluesky
 ```
 
 You'll be prompted for:
+
 - **Identifier**: Your handle (e.g., `user.bsky.social`) or email
 - **Password**: Your password or an [app-specific password](https://bsky.app/settings/app-passwords) (recommended)
 
@@ -250,26 +259,27 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 
 ### Keybindings
 
-| Key         | Action                          |
-| ----------- | ------------------------------- |
-| `j`/`Down`  | Move down                       |
-| `k`/`Up`    | Move up                         |
-| `h`/`Left`  | Focus threads panel             |
-| `l`/`Right` | Focus detail panel              |
-| `t`         | Swap panel positions            |
-| `p`         | Post new thread                 |
-| `P`         | Cross-post to all platforms     |
-| `r`         | Reply to selected thread        |
-| `R`         | Refresh feed                    |
-| `Tab`/`]`   | Switch platform (multi-platform)|
-| `Enter`     | Select / focus detail           |
-| `Esc`       | Back / cancel                   |
-| `?`         | Toggle help                     |
-| `q`         | Quit                            |
+| Key         | Action                           |
+| ----------- | -------------------------------- |
+| `j`/`Down`  | Move down                        |
+| `k`/`Up`    | Move up                          |
+| `h`/`Left`  | Focus threads panel              |
+| `l`/`Right` | Focus detail panel               |
+| `t`         | Swap panel positions             |
+| `p`         | Post new thread                  |
+| `P`         | Cross-post to all platforms      |
+| `r`         | Reply to selected thread         |
+| `R`         | Refresh feed                     |
+| `Tab`/`]`   | Switch platform (multi-platform) |
+| `Enter`     | Select / focus detail            |
+| `Esc`       | Back / cancel                    |
+| `?`         | Toggle help                      |
+| `q`         | Quit                             |
 
 ## Roadmap
 
 ### Core Features
+
 - [x] OAuth login with auto-generated localhost certs
 - [x] Hosted OAuth server (ndld) for secure credential management
 - [x] View threads feed
@@ -279,6 +289,7 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 - [x] Auto-refresh (15s)
 
 ### Multi-Platform Support
+
 - [x] Platform abstraction layer
 - [x] Bluesky integration (AT Protocol)
 - [x] Platform switching UI
@@ -289,6 +300,7 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 - [x] Bluesky reply support with proper threading
 
 ### Future Enhancements
+
 - [ ] Like/repost actions
 - [ ] Media preview (images)
 - [ ] More platforms (Mastodon, etc.)
@@ -304,14 +316,17 @@ MIT
 ## References
 
 ### APIs & Protocols
+
 - [Threads API docs](https://developers.facebook.com/docs/threads)
 - [AT Protocol](https://atproto.com/) - Bluesky's underlying protocol
 - [Bluesky API docs](https://docs.bsky.app/)
 - [ATrium](https://github.com/sugyan/atrium) - Rust AT Protocol SDK
 
 ### Libraries
+
 - [ratatui](https://docs.rs/ratatui/latest/ratatui/index.html) - TUI framework
 - [bsky-sdk](https://crates.io/crates/bsky-sdk) - Bluesky Rust SDK
 
 ### Other
+
 - [initial human written readme](./README.human.md)
