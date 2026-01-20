@@ -46,6 +46,21 @@ pub enum TokenExchangeError {
     Parse(String),
 }
 
+/// Parse response body as TokenResponse, logging body at debug level on failure
+async fn parse_token_response(
+    response: reqwest::Response,
+) -> Result<TokenResponse, TokenExchangeError> {
+    let body = response
+        .text()
+        .await
+        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
+
+    serde_json::from_str(&body).map_err(|e| {
+        tracing::debug!(response_body = %body, "Failed to parse token response");
+        TokenExchangeError::Parse(e.to_string())
+    })
+}
+
 /// Exchange an authorization code for an access token
 pub async fn exchange_code(
     client_id: &str,
@@ -76,12 +91,7 @@ pub async fn exchange_code(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
-
-    serde_json::from_str(&body).map_err(|e| TokenExchangeError::Parse(format!("{}: {}", e, body)))
+    parse_token_response(response).await
 }
 
 /// Exchange a short-lived access token for a long-lived one (60 days)
@@ -108,12 +118,7 @@ pub async fn exchange_for_long_lived_token(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
-
-    serde_json::from_str(&body).map_err(|e| TokenExchangeError::Parse(format!("{}: {}", e, body)))
+    parse_token_response(response).await
 }
 
 /// Refresh a long-lived access token (extends validity by another 60 days)
@@ -139,10 +144,5 @@ pub async fn refresh_access_token(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
-
-    serde_json::from_str(&body).map_err(|e| TokenExchangeError::Parse(format!("{}: {}", e, body)))
+    parse_token_response(response).await
 }
