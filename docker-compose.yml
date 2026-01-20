@@ -1,6 +1,9 @@
 services:
   ndld:
-    image: ghcr.io/pgray/ndld:main
+    container_name: ndld
+    image: ghcr.io/pgray/ndld:0.2
+    network_mode: host
+    user: root
     build:
       context: .
       dockerfile: ndld/Dockerfile
