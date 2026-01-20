@@ -149,6 +149,11 @@ async fn run_login() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Login successful, saving token");
     config.access_token = Some(token.access_token);
 
+    // Save expiration timestamp (default to 60 days if not provided)
+    let expires_in = token.expires_in.unwrap_or(60 * 24 * 60 * 60); // 60 days in seconds
+    config.token_expires_at = Some(Config::calculate_expiration(expires_in));
+    tracing::info!("Token expires in {} seconds", expires_in);
+
     // Ensure Bluesky config is preserved
     if config.bluesky.is_none() && existing_bluesky.is_some() {
         tracing::warn!("Bluesky config was lost during login, restoring");
@@ -169,6 +174,7 @@ async fn run_login() -> Result<(), Box<dyn std::error::Error>> {
 fn run_logout() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = Config::load()?;
     config.access_token = None;
+    config.token_expires_at = None;
     config.save()?;
     println!("Logged out. Token removed.");
     Ok(())
@@ -261,9 +267,42 @@ async fn run_bluesky_login() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::load()?;
+    let mut config = Config::load()?;
 
     let mut clients: HashMap<Platform, Box<dyn SocialClient>> = HashMap::new();
+
+    // Check if Threads token needs refreshing (27 days before expiration)
+    if config.has_threads() && config.should_refresh_token() {
+        tracing::info!("Threads token needs refreshing");
+
+        // Only refresh if we have the access token
+        if let Some(ref token) = config.access_token {
+            match ndl_core::refresh_access_token(token).await {
+                Ok(new_token) => {
+                    tracing::info!("Successfully refreshed Threads token");
+                    config.access_token = Some(new_token.access_token);
+
+                    // Update expiration timestamp
+                    let expires_in = new_token.expires_in.unwrap_or(60 * 24 * 60 * 60); // 60 days
+                    config.token_expires_at = Some(Config::calculate_expiration(expires_in));
+
+                    // Save updated config
+                    if let Err(e) = config.save() {
+                        tracing::warn!("Failed to save refreshed token: {}", e);
+                    } else {
+                        tracing::info!("Refreshed token saved to config");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to refresh token: {}", e);
+                    eprintln!(
+                        "Warning: Failed to refresh Threads token. You may need to re-authenticate."
+                    );
+                    eprintln!("Run 'ndl login threads' if you encounter authentication errors.");
+                }
+            }
+        }
+    }
 
     // Initialize Threads if configured
     if config.has_threads() {
@@ -320,13 +359,13 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
                 tracing::info!("Successfully connected to Bluesky");
 
                 // Update session in config for next time
-                if let Ok(new_session) = client.get_session().await {
-                    if bsky_config.session.as_ref() != Some(&new_session) {
-                        bsky_config.session = Some(new_session);
-                        let mut config_mut = Config::load().unwrap_or_default();
-                        config_mut.bluesky = Some(bsky_config);
-                        let _ = config_mut.save(); // Best effort, don't fail if this errors
-                    }
+                if let Ok(new_session) = client.get_session().await
+                    && bsky_config.session.as_ref() != Some(&new_session)
+                {
+                    bsky_config.session = Some(new_session);
+                    let mut config_mut = Config::load().unwrap_or_default();
+                    config_mut.bluesky = Some(bsky_config);
+                    let _ = config_mut.save(); // Best effort, don't fail if this errors
                 }
 
                 clients.insert(Platform::Bluesky, Box::new(client));

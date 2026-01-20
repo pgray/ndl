@@ -692,24 +692,24 @@ q            Quit
             None
         };
 
-        if let Some(post_id) = reply_to_id {
-            if let Some(client) = self.clients.get(&self.current_platform) {
-                let client = client.clone();
-                let platform = self.current_platform;
+        if let Some(post_id) = reply_to_id
+            && let Some(client) = self.clients.get(&self.current_platform)
+        {
+            let client = client.clone();
+            let platform = self.current_platform;
 
-                info!("Sending reply to {} on {}", post_id, platform);
-                self.status_message = Some(format!("Replying on {}...", platform));
+            info!("Sending reply to {} on {}", post_id, platform);
+            self.status_message = Some(format!("Replying on {}...", platform));
 
-                tokio::spawn(async move {
-                    let result = client.reply_to_post(&post_id, &text).await;
-                    let _ = tx
-                        .send(AppEvent::ReplyResult(
-                            platform,
-                            result.map_err(|e| e.to_string()),
-                        ))
-                        .await;
-                });
-            }
+            tokio::spawn(async move {
+                let result = client.reply_to_post(&post_id, &text).await;
+                let _ = tx
+                    .send(AppEvent::ReplyResult(
+                        platform,
+                        result.map_err(|e| e.to_string()),
+                    ))
+                    .await;
+            });
         }
     }
 

@@ -1,16 +1,81 @@
 use axum::{
     Router,
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{ConnectInfo, Path, Query, State},
+    http::{HeaderMap, StatusCode, request::Request},
     response::{Html, IntoResponse, Json},
     routing::{get, post},
 };
 use maud::{DOCTYPE, Markup, html};
 use serde::{Deserialize, Serialize};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tower_governor::{
-    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+    GovernorLayer, errors::GovernorError, governor::GovernorConfigBuilder,
+    key_extractor::KeyExtractor,
 };
+
+/// IP key extractor that falls back to a default IP instead of erroring.
+/// This handles cases where the server is behind a proxy that doesn't set
+/// forwarding headers and the socket address is unavailable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FallbackIpKeyExtractor;
+
+impl KeyExtractor for FallbackIpKeyExtractor {
+    type Key = IpAddr;
+
+    fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
+        let headers = req.headers();
+
+        // Try various IP sources, fall back to localhost if all fail
+        let ip = maybe_x_forwarded_for(headers)
+            .or_else(|| maybe_x_real_ip(headers))
+            .or_else(|| maybe_forwarded(headers))
+            .or_else(|| {
+                req.extensions()
+                    .get::<ConnectInfo<SocketAddr>>()
+                    .map(|ci| ci.0.ip())
+            })
+            .unwrap_or(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+
+        Ok(ip)
+    }
+}
+
+const X_FORWARDED_FOR: &str = "x-forwarded-for";
+const X_REAL_IP: &str = "x-real-ip";
+const FORWARDED: &str = "forwarded";
+
+fn maybe_x_forwarded_for(headers: &HeaderMap) -> Option<IpAddr> {
+    headers
+        .get(X_FORWARDED_FOR)
+        .and_then(|hv| hv.to_str().ok())
+        .and_then(|s: &str| s.split(',').find_map(|s| s.trim().parse::<IpAddr>().ok()))
+}
+
+fn maybe_x_real_ip(headers: &HeaderMap) -> Option<IpAddr> {
+    headers
+        .get(X_REAL_IP)
+        .and_then(|hv| hv.to_str().ok())
+        .and_then(|s: &str| s.parse::<IpAddr>().ok())
+}
+
+fn maybe_forwarded(headers: &HeaderMap) -> Option<IpAddr> {
+    headers
+        .get(FORWARDED)
+        .and_then(|hv| hv.to_str().ok())
+        .and_then(|s: &str| {
+            // Parse "for=<ip>" from Forwarded header
+            s.split(';').find_map(|part: &str| {
+                let part = part.trim();
+                if part.to_lowercase().starts_with("for=") {
+                    let ip_str = part[4..].trim_matches(|c| c == '"' || c == '[' || c == ']');
+                    ip_str.parse::<IpAddr>().ok()
+                } else {
+                    None
+                }
+            })
+        })
+}
 
 use crate::auth::{AuthState, OAuthConfig, SessionStore};
 
@@ -585,7 +650,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         GovernorConfigBuilder::default()
             .per_second(6) // refill rate: 1 token per 6 seconds = 10 per minute
             .burst_size(10) // allow burst of 10
-            .key_extractor(SmartIpKeyExtractor)
+            .key_extractor(FallbackIpKeyExtractor)
             .finish()
             .expect("Failed to create rate limiter for /auth/start"),
     );
@@ -596,7 +661,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         GovernorConfigBuilder::default()
             .per_second(1) // refill rate: 1 token per second = 60 per minute
             .burst_size(10) // allow burst of 10
-            .key_extractor(SmartIpKeyExtractor)
+            .key_extractor(FallbackIpKeyExtractor)
             .finish()
             .expect("Failed to create rate limiter for /auth/poll"),
     );

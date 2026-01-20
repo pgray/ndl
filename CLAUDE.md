@@ -162,17 +162,18 @@ cargo test --workspace
 
 ## Pre-commit Checklist
 
-Before committing changes, run these commands to validate:
+**IMPORTANT**: Before committing changes, run these commands in order:
 
 ```bash
-cargo fmt --all                      # Format code
+cargo fmt --all                         # Format code
 cargo clippy --workspace --all-targets  # Lint for warnings
-cargo check --workspace              # Quick compile check
-cargo build --workspace              # Full build
-cargo test --workspace               # Run all tests
+cargo check --workspace                 # Quick compile check
+cargo build --workspace                 # Full build (optional but recommended)
+cargo test --workspace                  # Run all tests (optional but recommended)
 ```
 
-All commands must pass without errors. Clippy warnings should be fixed before committing.
+**Required**: `cargo fmt`, `cargo clippy`, and `cargo check` must pass without errors.
+**Recommended**: Fix all clippy warnings before committing. Run full build and tests when making significant changes.
 
 ## Updating Dependencies
 
