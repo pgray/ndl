@@ -1,8 +1,52 @@
 # OAuth Setup for ndl
 
-This guide walks through configuring Meta/Threads OAuth for local development.
+ndl supports two OAuth methods for authenticating with the Threads API.
 
-## Meta App Dashboard Setup
+## Default: Hosted OAuth
+
+The simplest option - no setup required. ndl uses a hosted OAuth server at `ndl.pgray.dev`:
+
+```bash
+ndl login
+```
+
+### How it works
+
+1. `ndl login` sends a request to `https://ndl.pgray.dev/auth/start`
+2. The server creates a session and returns an authorization URL
+3. Your browser opens to Threads authorization
+4. After you authorize, Threads redirects to the server's `/auth/callback`
+5. The server exchanges the code for a token and stores it in the session
+6. ndl polls `/auth/poll/{session_id}` until the token is ready
+7. Token is saved to `~/.config/ndl/config.toml`
+
+This keeps the client_secret secure on the server - your local ndl installation never sees it.
+
+### Using a custom auth server
+
+To use a different ndld server:
+
+```bash
+# Via environment variable
+export NDL_OAUTH_ENDPOINT=https://your-ndld-server.com
+ndl login
+
+# Or in ~/.config/ndl/config.toml:
+# auth_server = "https://your-ndld-server.com"
+```
+
+## Alternative: Local OAuth
+
+If you have your own Threads API credentials and prefer to run OAuth locally:
+
+```bash
+export NDL_OAUTH_ENDPOINT=""
+export NDL_CLIENT_ID=your_client_id
+export NDL_CLIENT_SECRET=your_client_secret
+ndl login
+```
+
+### Meta App Dashboard Setup
 
 1. Go to [developers.facebook.com](https://developers.facebook.com) and create/open your app
 2. Navigate to **Use cases** → **Settings** under "Access the Threads API"
@@ -16,7 +60,7 @@ This guide walks through configuring Meta/Threads OAuth for local development.
    | Deauthorize callback URL | `https://localhost:1337/deauthorize` |
    | Delete callback URL      | `https://localhost:1337/delete`      |
 
-## HTTPS Requirement
+### HTTPS Requirement
 
 Meta requires HTTPS for OAuth redirects, even for localhost.
 
@@ -28,7 +72,7 @@ ndl automatically generates a self-signed certificate at runtime using `rcgen` a
 
 Your browser will show a certificate warning (expected for self-signed certs). Accept it to continue.
 
-### Alternative: Use ngrok
+#### Alternative: Use ngrok
 
 If you prefer not to accept self-signed cert warnings:
 
@@ -37,7 +81,7 @@ ngrok http 1337
 # Update your Meta app redirect URLs with the ngrok HTTPS URL
 ```
 
-## OAuth Flow
+### Local OAuth Flow
 
 1. `ndl login` starts a local HTTPS server on port 1337
 2. Browser opens to Threads authorization:
@@ -71,5 +115,4 @@ ngrok http 1337
 
 - [Threads API docs](https://developers.facebook.com/docs/threads)
 - [Access token guide](https://developers.facebook.com/docs/threads/get-started/get-access-tokens-and-permissions)
-
-## https://www.threads.com/settings/website_permissions
+- [Manage website permissions](https://www.threads.com/settings/website_permissions)

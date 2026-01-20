@@ -25,10 +25,11 @@ Social media notifications can pull you out of flow state. needle lets you:
 
 ## Project Structure
 
-This is a Cargo workspace with two binaries:
+This is a Cargo workspace with two binaries and a shared library:
 
 - **ndl** - The TUI client
 - **ndld** - OAuth server for hosted authentication (keeps client_secret secure on server)
+- **ndl-core** - Shared library for OAuth types and token exchange
 
 ## Installation
 
