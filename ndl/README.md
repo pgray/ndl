@@ -283,9 +283,9 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 - [x] Platform switching UI
 - [x] Cross-posting to multiple platforms
 - [x] Per-platform state management
-- [ ] Bluesky reply support
-- [ ] Session persistence for Bluesky
-- [ ] Full post text extraction for Bluesky
+- [x] Session persistence for Bluesky
+- [x] Full post text extraction for Bluesky
+- [ ] Bluesky reply support (needs advanced URI handling)
 
 ### Future Enhancements
 - [ ] Like/repost actions

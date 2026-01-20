@@ -31,17 +31,35 @@ impl BlueskyClient {
     }
 
     /// Create a client from an existing session (for session persistence)
-    pub async fn from_session(_session_data: String) -> Result<Self, PlatformError> {
-        // TODO: Implement session restoration using FileStore
-        // For now, this is a placeholder
-        Err(PlatformError::NotImplemented)
+    pub async fn from_session(session_data: String) -> Result<Self, PlatformError> {
+        use bsky_sdk::agent::config::Config as BskyConfig;
+
+        // Deserialize the session from JSON
+        let config: BskyConfig = serde_json::from_str(&session_data)
+            .map_err(|e| PlatformError::Auth(format!("Failed to deserialize session: {}", e)))?;
+
+        // Create agent from config
+        let agent = BskyAgent::builder()
+            .config(config)
+            .build()
+            .await
+            .map_err(|e| PlatformError::Auth(format!("Failed to create agent from session: {}", e)))?;
+
+        Ok(Self {
+            agent: Arc::new(RwLock::new(agent)),
+        })
     }
 
     /// Get the session data for persistence
     pub async fn get_session(&self) -> Result<String, PlatformError> {
-        // TODO: Implement session serialization
-        // For now, this is a placeholder
-        Err(PlatformError::NotImplemented)
+        let agent = self.agent.read().await;
+
+        // Get the configuration which includes session data
+        let config = agent.to_config().await;
+
+        // Serialize to JSON
+        serde_json::to_string(&config)
+            .map_err(|e| PlatformError::Api(format!("Failed to serialize session: {}", e)))
     }
 }
 
@@ -112,8 +130,10 @@ impl SocialClient for BlueskyClient {
             .iter()
             .map(|feed_view| {
                 // Extract text from the record
-                // Note: This is simplified - in a real implementation we'd properly deserialize the record
-                let text = Some(String::new()); // TODO: Extract text from record properly
+                // The record is Unknown type, we need to serialize it to JSON and extract text
+                let text = serde_json::to_value(&feed_view.post.record)
+                    .ok()
+                    .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(String::from));
 
                 Post {
                     id: feed_view.post.uri.to_string(),
@@ -173,11 +193,9 @@ impl SocialClient for BlueskyClient {
         post_id: &str,
         text: &str,
     ) -> Result<PostResult, PlatformError> {
-        let agent = self.agent.read().await;
-
-        // To reply, we need to construct a reply reference
-        // This requires getting the post we're replying to
-        // For now, return not implemented as we need to properly handle URI parsing
+        // For now, return not implemented as we need proper URI type handling
+        // The bsky-sdk may not expose all the necessary types for advanced reply handling
+        // This can be implemented once we have better type information
         Err(PlatformError::NotImplemented)
     }
 

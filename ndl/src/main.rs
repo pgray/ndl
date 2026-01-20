@@ -197,15 +197,18 @@ async fn run_bluesky_login() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("Authenticating...");
     match BlueskyClient::login(&identifier, &password).await {
-        Ok(_) => {
+        Ok(client) => {
             println!("✓ Authentication successful!");
+
+            // Get and save session data
+            let session = client.get_session().await.ok();
 
             // Save to config
             let mut config = Config::load()?;
             config.bluesky = Some(config::BlueskyConfig {
                 identifier,
                 password,
-                session: None,
+                session,
             });
             config.save()?;
 
@@ -259,10 +262,42 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize Bluesky if configured
     if config.has_bluesky() {
-        let bsky_config = config.bluesky.clone().unwrap();
-        match BlueskyClient::login(&bsky_config.identifier, &bsky_config.password).await {
+        let mut bsky_config = config.bluesky.clone().unwrap();
+
+        // Try to use saved session first
+        let client_result = if let Some(ref session) = bsky_config.session {
+            tracing::debug!("Attempting to restore Bluesky session");
+            match BlueskyClient::from_session(session.clone()).await {
+                Ok(client) => {
+                    tracing::info!("Successfully restored Bluesky session");
+                    Ok(client)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to restore session, will re-authenticate: {}", e);
+                    // Fall back to login
+                    BlueskyClient::login(&bsky_config.identifier, &bsky_config.password).await
+                }
+            }
+        } else {
+            // No session saved, login normally
+            tracing::debug!("No saved session, logging in to Bluesky");
+            BlueskyClient::login(&bsky_config.identifier, &bsky_config.password).await
+        };
+
+        match client_result {
             Ok(client) => {
                 tracing::info!("Successfully connected to Bluesky");
+
+                // Update session in config for next time
+                if let Ok(new_session) = client.get_session().await {
+                    if bsky_config.session.as_ref() != Some(&new_session) {
+                        bsky_config.session = Some(new_session);
+                        let mut config_mut = Config::load().unwrap_or_default();
+                        config_mut.bluesky = Some(bsky_config);
+                        let _ = config_mut.save(); // Best effort, don't fail if this errors
+                    }
+                }
+
                 clients.insert(Platform::Bluesky, Box::new(client));
             }
             Err(e) => {
