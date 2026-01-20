@@ -5,9 +5,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;
 
-use crate::platform::{
-    PlatformError, Post, ReplyThread as PlatformReplyThread, SocialClient,
-};
+use crate::platform::{PlatformError, Post, ReplyThread as PlatformReplyThread, SocialClient};
 
 const BASE_URL: &str = "https://graph.threads.net";
 
