@@ -74,10 +74,12 @@ pub async fn exchange_code(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    response
-        .json::<TokenResponse>()
+    let body = response
+        .text()
         .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))
+        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
+
+    serde_json::from_str(&body).map_err(|e| TokenExchangeError::Parse(format!("{}: {}", e, body)))
 }
 
 /// Exchange a short-lived access token for a long-lived one (60 days)
@@ -104,10 +106,12 @@ pub async fn exchange_for_long_lived_token(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    response
-        .json::<TokenResponse>()
+    let body = response
+        .text()
         .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))
+        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
+
+    serde_json::from_str(&body).map_err(|e| TokenExchangeError::Parse(format!("{}: {}", e, body)))
 }
 
 /// Refresh a long-lived access token (extends validity by another 60 days)
@@ -133,8 +137,10 @@ pub async fn refresh_access_token(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    response
-        .json::<TokenResponse>()
+    let body = response
+        .text()
         .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))
+        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
+
+    serde_json::from_str(&body).map_err(|e| TokenExchangeError::Parse(format!("{}: {}", e, body)))
 }
