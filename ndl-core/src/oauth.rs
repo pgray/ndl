@@ -1,14 +1,33 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de};
 use thiserror::Error;
 
 pub const TOKEN_URL: &str = "https://graph.threads.net/oauth/access_token";
 pub const OAUTH_SCOPES: &str =
     "threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish";
 
+/// Deserialize user_id from either a string or number (Threads API returns both)
+fn deserialize_user_id<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        String(String),
+        Number(u64),
+    }
+
+    match StringOrNumber::deserialize(deserializer)? {
+        StringOrNumber::String(s) => s.parse().map_err(de::Error::custom),
+        StringOrNumber::Number(n) => Ok(n),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct TokenResponse {
     pub access_token: String,
     #[allow(dead_code)]
+    #[serde(deserialize_with = "deserialize_user_id")]
     pub user_id: u64,
     /// Number of seconds until the token expires (3600 for short-lived, 5184000 for long-lived)
     #[serde(default)]

@@ -14,7 +14,6 @@ This file provides context for AI assistants working on this codebase.
 ```
 ndl/
 ├── Cargo.toml           # Workspace manifest (shared version here)
-├── .cargo/config.toml   # Linker config (wild on Linux)
 ├── ndl/                 # TUI client
 │   ├── Cargo.toml
 │   ├── build.rs         # Embeds git version at compile time
@@ -51,7 +50,6 @@ ndl/
 - **Async Runtime**: tokio
 - **Serialization**: serde + serde_json for config and API
 - **Bluesky**: bsky-sdk + atrium-api (AT Protocol)
-- **Linker**: wild (Linux) - configured in `.cargo/config.toml`
 
 ## Versioning
 
