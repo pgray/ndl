@@ -2047,7 +2047,7 @@ dependencies = [
 
 [[package]]
 name = "ndl"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "atrium-api",
@@ -2079,7 +2079,7 @@ dependencies = [
 
 [[package]]
 name = "ndl-core"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "reqwest",
  "serde",
@@ -2088,7 +2088,7 @@ dependencies = [
 
 [[package]]
 name = "ndld"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "axum",
  "axum-server 0.8.0",
