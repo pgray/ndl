@@ -9,9 +9,7 @@ use bsky_sdk::BskyAgent;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::platform::{
-    Platform, PlatformError, Post, PostResult, ReplyThread, SocialClient, UserProfile,
-};
+use crate::platform::{PlatformError, Post, ReplyThread, SocialClient};
 
 #[derive(Clone)]
 pub struct BlueskyClient {
@@ -97,14 +95,12 @@ impl BlueskyClient {
                     id: post_view.uri.to_string(),
                     text,
                     author_handle: Some(post_view.author.handle.as_str().to_string()),
-                    author_name: post_view.author.display_name.clone(),
                     timestamp: Some(post_view.indexed_at.as_ref().to_string()),
                     permalink: Some(format!(
                         "https://bsky.app/profile/{}/post/{}",
                         post_view.author.handle.as_str(),
                         post_view.uri.to_string().split('/').last().unwrap_or("")
                     )),
-                    platform: Platform::Bluesky,
                     media_type: None,
                 };
 
@@ -167,54 +163,10 @@ impl BlueskyClient {
             _ => Err(PlatformError::Api("Post not found".to_string())),
         }
     }
-
-    /// Get just the CID for a post (for backwards compatibility)
-    async fn get_post_cid(&self, uri: &str) -> Result<String, PlatformError> {
-        let (cid, _) = self.get_post_info(uri).await?;
-        Ok(cid)
-    }
 }
 
 #[async_trait]
 impl SocialClient for BlueskyClient {
-    fn platform(&self) -> Platform {
-        Platform::Bluesky
-    }
-
-    async fn get_profile(&self) -> Result<UserProfile, PlatformError> {
-        let agent = self.agent.read().await;
-
-        // Get the session to get the DID
-        let session = agent
-            .get_session()
-            .await
-            .ok_or_else(|| PlatformError::Auth("No active session".to_string()))?;
-
-        let did = session.did.clone();
-
-        // Get the profile using the actor profile endpoint
-        let profile = agent
-            .api
-            .app
-            .bsky
-            .actor
-            .get_profile(
-                atrium_api::app::bsky::actor::get_profile::ParametersData { actor: did.into() }
-                    .into(),
-            )
-            .await
-            .map_err(|e| PlatformError::Api(format!("Failed to get profile: {}", e)))?;
-
-        Ok(UserProfile {
-            id: profile.data.did.to_string(),
-            handle: Some(profile.data.handle.to_string()),
-            display_name: profile.data.display_name.clone(),
-            avatar_url: profile.data.avatar.clone(),
-            bio: profile.data.description.clone(),
-            platform: Platform::Bluesky,
-        })
-    }
-
     async fn get_posts(&self, limit: Option<u32>) -> Result<Vec<Post>, PlatformError> {
         let agent = self.agent.read().await;
 
@@ -264,7 +216,6 @@ impl SocialClient for BlueskyClient {
                     id: feed_view.post.uri.to_string(),
                     text,
                     author_handle: Some(feed_view.post.author.handle.as_str().to_string()),
-                    author_name: feed_view.post.author.display_name.clone(),
                     timestamp: Some(feed_view.post.indexed_at.as_ref().to_string()),
                     permalink: Some(format!(
                         "https://bsky.app/profile/{}/post/{}",
@@ -277,7 +228,6 @@ impl SocialClient for BlueskyClient {
                             .last()
                             .unwrap_or("")
                     )),
-                    platform: Platform::Bluesky,
                     media_type: None,
                 }
             })
@@ -328,10 +278,10 @@ impl SocialClient for BlueskyClient {
         }
     }
 
-    async fn create_post(&self, text: &str) -> Result<PostResult, PlatformError> {
+    async fn create_post(&self, text: &str) -> Result<(), PlatformError> {
         let agent = self.agent.read().await;
 
-        let response = agent
+        agent
             .create_record(RecordData {
                 created_at: Datetime::now(),
                 embed: None,
@@ -346,13 +296,10 @@ impl SocialClient for BlueskyClient {
             .await
             .map_err(|e| PlatformError::Api(format!("Failed to create post: {}", e)))?;
 
-        Ok(PostResult {
-            id: response.uri.to_string(),
-            platform: Platform::Bluesky,
-        })
+        Ok(())
     }
 
-    async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<PostResult, PlatformError> {
+    async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<(), PlatformError> {
         // post_id is the AT URI of the parent post
         // We need to get the CID and root info for the reply reference
         let (parent_cid, root_info) = self.get_post_info(post_id).await?;
@@ -381,7 +328,7 @@ impl SocialClient for BlueskyClient {
 
         let agent = self.agent.read().await;
 
-        let response = agent
+        agent
             .create_record(RecordData {
                 created_at: Datetime::now(),
                 embed: None,
@@ -396,13 +343,6 @@ impl SocialClient for BlueskyClient {
             .await
             .map_err(|e| PlatformError::Api(format!("Failed to create reply: {}", e)))?;
 
-        Ok(PostResult {
-            id: response.uri.to_string(),
-            platform: Platform::Bluesky,
-        })
-    }
-
-    fn clone_client(&self) -> Box<dyn SocialClient> {
-        Box::new(self.clone())
+        Ok(())
     }
 }

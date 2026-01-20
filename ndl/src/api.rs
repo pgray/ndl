@@ -6,8 +6,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::platform::{
-    Platform, PlatformError, Post, PostResult, ReplyThread as PlatformReplyThread, SocialClient,
-    UserProfile as PlatformUserProfile,
+    PlatformError, Post, ReplyThread as PlatformReplyThread, SocialClient,
 };
 
 const BASE_URL: &str = "https://graph.threads.net";
@@ -401,22 +400,6 @@ impl ThreadsClient {
 // Implement the platform abstraction trait for ThreadsClient
 #[async_trait]
 impl SocialClient for ThreadsClient {
-    fn platform(&self) -> Platform {
-        Platform::Threads
-    }
-
-    async fn get_profile(&self) -> Result<PlatformUserProfile, PlatformError> {
-        let profile = self.get_profile().await?;
-        Ok(PlatformUserProfile {
-            id: profile.id,
-            handle: profile.username,
-            display_name: profile.name,
-            avatar_url: profile.threads_profile_picture_url,
-            bio: profile.threads_biography,
-            platform: Platform::Threads,
-        })
-    }
-
     async fn get_posts(&self, limit: Option<u32>) -> Result<Vec<Post>, PlatformError> {
         let response = self.get_threads(limit).await?;
         Ok(response
@@ -426,10 +409,8 @@ impl SocialClient for ThreadsClient {
                 id: t.id,
                 text: t.text,
                 author_handle: t.username,
-                author_name: None,
                 timestamp: t.timestamp,
                 permalink: t.permalink,
-                platform: Platform::Threads,
                 media_type: t.media_type,
             })
             .collect())
@@ -444,24 +425,14 @@ impl SocialClient for ThreadsClient {
         Ok(convert_reply_threads(replies))
     }
 
-    async fn create_post(&self, text: &str) -> Result<PostResult, PlatformError> {
-        let response = self.post_thread(text).await?;
-        Ok(PostResult {
-            id: response.id,
-            platform: Platform::Threads,
-        })
+    async fn create_post(&self, text: &str) -> Result<(), PlatformError> {
+        self.post_thread(text).await?;
+        Ok(())
     }
 
-    async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<PostResult, PlatformError> {
-        let response = self.reply_to_thread(post_id, text).await?;
-        Ok(PostResult {
-            id: response.id,
-            platform: Platform::Threads,
-        })
-    }
-
-    fn clone_client(&self) -> Box<dyn SocialClient> {
-        Box::new(self.clone())
+    async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<(), PlatformError> {
+        self.reply_to_thread(post_id, text).await?;
+        Ok(())
     }
 }
 
@@ -474,10 +445,8 @@ fn convert_reply_threads(threads: Vec<ReplyThread>) -> Vec<PlatformReplyThread> 
                 id: rt.thread.id,
                 text: rt.thread.text,
                 author_handle: rt.thread.username,
-                author_name: None,
                 timestamp: rt.thread.timestamp,
                 permalink: rt.thread.permalink,
-                platform: Platform::Threads,
                 media_type: rt.thread.media_type,
             },
             replies: convert_reply_threads(rt.replies),

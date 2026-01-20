@@ -84,11 +84,6 @@ impl Config {
         Ok(())
     }
 
-    /// Check if we have a valid access token
-    pub fn is_authenticated(&self) -> bool {
-        self.access_token.is_some()
-    }
-
     /// Check if client credentials are configured
     #[allow(dead_code)]
     pub fn has_credentials(&self) -> bool {

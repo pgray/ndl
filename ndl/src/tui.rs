@@ -110,16 +110,6 @@ impl App {
         }
     }
 
-    /// Get the current platform's state
-    fn current_state(&self) -> Option<&PlatformState> {
-        self.platform_states.get(&self.current_platform)
-    }
-
-    /// Get the current platform's state (mutable)
-    fn current_state_mut(&mut self) -> Option<&mut PlatformState> {
-        self.platform_states.get_mut(&self.current_platform)
-    }
-
     /// Toggle to the next platform
     fn toggle_platform(&mut self) {
         let platforms: Vec<Platform> = self.clients.keys().copied().collect();
@@ -715,7 +705,7 @@ q            Quit
                     let _ = tx
                         .send(AppEvent::ReplyResult(
                             platform,
-                            result.map(|_| ()).map_err(|e| e.to_string()),
+                            result.map_err(|e| e.to_string()),
                         ))
                         .await;
                 });
@@ -742,7 +732,7 @@ q            Quit
             let _ = tx
                 .send(AppEvent::PostResult(
                     platform,
-                    result.map(|_| ()).map_err(|e| e.to_string()),
+                    result.map_err(|e| e.to_string()),
                 ))
                 .await;
         });
@@ -768,7 +758,7 @@ q            Quit
                 let _ = tx
                     .send(AppEvent::PostResult(
                         *platform,
-                        result.map(|_| ()).map_err(|e| e.to_string()),
+                        result.map_err(|e| e.to_string()),
                     ))
                     .await;
             }
