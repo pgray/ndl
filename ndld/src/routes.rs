@@ -8,6 +8,9 @@ use axum::{
 use maud::{DOCTYPE, Markup, html};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tower_governor::{
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+};
 
 use crate::auth::{AuthState, OAuthConfig, SessionStore};
 
@@ -71,14 +74,14 @@ pub async fn auth_callback(
     let session_id = match params.state {
         Some(id) => id,
         None => {
-            return Html(error_html("Missing state parameter")).into_response();
+            return error_html("Missing state parameter").into_response();
         }
     };
 
     let session = match state.sessions.get_session(&session_id) {
         Some(s) => s,
         None => {
-            return Html(error_html("Session not found or expired")).into_response();
+            return error_html("Session not found or expired").into_response();
         }
     };
 
@@ -89,7 +92,7 @@ pub async fn auth_callback(
             error: error_msg.clone(),
         };
         tracing::warn!(session_id = %session_id, error = %error_msg, "OAuth error");
-        return Html(error_html(&error_msg)).into_response();
+        return error_html(&error_msg).into_response();
     }
 
     // Exchange code for token
@@ -100,7 +103,7 @@ pub async fn auth_callback(
             *session.state.write().await = AuthState::Failed {
                 error: error.to_string(),
             };
-            return Html(error_html(error)).into_response();
+            return error_html(error).into_response();
         }
     };
 
@@ -117,7 +120,7 @@ pub async fn auth_callback(
         Err(e) => {
             *session.state.write().await = AuthState::Failed { error: e.clone() };
             tracing::error!(session_id = %session_id, error = %e, "Token exchange failed");
-            Html(error_html(&e)).into_response()
+            error_html(&e).into_response()
         }
     }
 }
@@ -173,7 +176,7 @@ pub async fn index() -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { "ndld - OAuth server for ndl" }
+                title { "ndl - needle" }
                 style {
                     (LANDING_CSS)
                 }
@@ -244,17 +247,18 @@ pub async fn index() -> Markup {
                     }
 
                     div.deps {
-                        h2 { "Built with ❤️ using" }
+                        h2 { "Built with 🔥 using" }
                         ul {
-                            li { "❤️ " a href="https://github.com/tokio-rs/axum" { "axum" } " - web framework" }
-                            li { "❤️ " a href="https://github.com/tokio-rs/tokio" { "tokio" } " - async runtime" }
-                            li { "❤️ " a href="https://github.com/seanmonstar/reqwest" { "reqwest" } " - HTTP client" }
-                            li { "❤️ " a href="https://github.com/xacrimon/dashmap" { "dashmap" } " - concurrent hashmap" }
-                            li { "❤️ " a href="https://github.com/lambda-fairy/maud" { "maud" } " - HTML templating" }
-                            li { "❤️ " a href="https://github.com/uuid-rs/uuid" { "uuid" } " - unique IDs" }
-                            li { "❤️ " a href="https://github.com/serde-rs/serde" { "serde" } " - serialization" }
-                            li { "❤️ " a href="https://github.com/tokio-rs/tracing" { "tracing" } " - logging" }
-                            li { "❤️ " a href="https://github.com/rustls/rustls" { "rustls" } " - TLS" }
+                            li { "🔥 " a href="https://github.com/tokio-rs/axum" { "axum" } " - web framework" }
+                            li { "🔥 " a href="https://github.com/tokio-rs/tokio" { "tokio" } " - async runtime" }
+                            li { "🔥 " a href="https://github.com/seanmonstar/reqwest" { "reqwest" } " - HTTP client" }
+                            li { "🔥 " a href="https://github.com/xacrimon/dashmap" { "dashmap" } " - concurrent hashmap" }
+                            li { "🔥 " a href="https://github.com/lambda-fairy/maud" { "maud" } " - HTML templating" }
+                            li { "🔥 " a href="https://github.com/uuid-rs/uuid" { "uuid" } " - unique IDs" }
+                            li { "🔥 " a href="https://github.com/serde-rs/serde" { "serde" } " - serialization" }
+                            li { "🔥 " a href="https://github.com/tokio-rs/tracing" { "tracing" } " - logging" }
+                            li { "🔥 " a href="https://github.com/rustls/rustls" { "rustls" } " - TLS" }
+                            li { "🔥 " a href="https://github.com/benwis/tower-governor" { "tower-governor" } " - rate limiting" }
                         }
                     }
 
@@ -560,8 +564,8 @@ pub async fn tos() -> Markup {
     }
 }
 
-/// Build the router
-pub fn create_router(state: Arc<AppState>) -> Router {
+/// Build the base router without rate limiting (for testing)
+fn base_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/privacy-policy", get(privacy_policy))
@@ -571,6 +575,57 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/auth/poll/{session_id}", get(poll_auth))
         .route("/health", get(health))
         .with_state(state)
+}
+
+/// Build the router with rate limiting for production use
+pub fn create_router(state: Arc<AppState>) -> Router {
+    // Rate limit for /auth/start: 10 requests per minute per IP
+    // This prevents session exhaustion attacks
+    let start_limiter = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(6) // refill rate: 1 token per 6 seconds = 10 per minute
+            .burst_size(10) // allow burst of 10
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .expect("Failed to create rate limiter for /auth/start"),
+    );
+
+    // Rate limit for /auth/poll: 60 requests per minute per IP
+    // Polling is expected to be frequent during auth flow
+    let poll_limiter = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(1) // refill rate: 1 token per second = 60 per minute
+            .burst_size(10) // allow burst of 10
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .expect("Failed to create rate limiter for /auth/poll"),
+    );
+
+    // Routes with rate limiting on auth endpoints
+    let auth_start = Router::new()
+        .route("/auth/start", post(start_auth))
+        .layer(GovernorLayer::new(start_limiter));
+
+    let auth_poll = Router::new()
+        .route("/auth/poll/{session_id}", get(poll_auth))
+        .layer(GovernorLayer::new(poll_limiter));
+
+    Router::new()
+        .route("/", get(index))
+        .route("/privacy-policy", get(privacy_policy))
+        .route("/tos", get(tos))
+        .route("/auth/callback", get(auth_callback))
+        .route("/health", get(health))
+        .merge(auth_start)
+        .merge(auth_poll)
+        .with_state(state)
+}
+
+/// Build the router without rate limiting (for testing only)
+///
+/// Use `create_router` for production - it includes rate limiting.
+pub fn create_test_router(state: Arc<AppState>) -> Router {
+    base_router(state)
 }
 
 // HTML responses
@@ -608,40 +663,42 @@ fn success_html() -> &'static str {
 </html>"#
 }
 
-fn error_html(error: &str) -> String {
-    format!(
-        r#"<!DOCTYPE html>
-<html>
-<head>
-    <title>ndl - Authorization Failed</title>
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: #0a0a0a;
-            color: #fff;
-        }}
-        .container {{
-            text-align: center;
-            padding: 2rem;
-        }}
-        h1 {{ color: #ff4444; }}
-        p {{ color: #888; }}
-        .error {{ color: #ff8888; margin-top: 1rem; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Authorization Failed</h1>
-        <p>Something went wrong during authentication.</p>
-        <p class="error">{}</p>
-    </div>
-</body>
-</html>"#,
-        error
-    )
+fn error_html(error: &str) -> Markup {
+    html! {
+        (DOCTYPE)
+        html {
+            head {
+                title { "ndl - Authorization Failed" }
+                style {
+                    r#"
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: #0a0a0a;
+                        color: #fff;
+                    }
+                    .container {
+                        text-align: center;
+                        padding: 2rem;
+                    }
+                    h1 { color: #ff4444; }
+                    p { color: #888; }
+                    .error { color: #ff8888; margin-top: 1rem; }
+                    "#
+                }
+            }
+            body {
+                div.container {
+                    h1 { "Authorization Failed" }
+                    p { "Something went wrong during authentication." }
+                    // maud auto-escapes this, preventing XSS
+                    p.error { (error) }
+                }
+            }
+        }
+    }
 }

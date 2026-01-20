@@ -1,6 +1,10 @@
 # ndl - needle
 
-A minimal TUI client for [Threads](https://threads.net) - stay aware of notifications without the distractions of a full social media interface.
+[![CI](https://github.com/pgray/ndl/actions/workflows/ci.yml/badge.svg)](https://github.com/pgray/ndl/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/ndl.svg)](https://crates.io/crates/ndl)
+[![GitHub Release](https://img.shields.io/github/v/release/pgray/ndl)](https://github.com/pgray/ndl/releases)
+
+A minimal multi-platform TUI client for [Threads](https://threads.net) and [Bluesky](https://bsky.app) - stay aware of notifications without the distractions of a full social media interface.
 
 ![ndl screenshot](https://raw.githubusercontent.com/pgray/ndl/main/ndl/pics/srug.png)
 
@@ -14,6 +18,9 @@ Social media notifications can pull you out of flow state. needle lets you:
 
 ## Features
 
+- **Multi-platform support** - Use both Threads and Bluesky simultaneously
+- **Platform switching** - Toggle between platforms with `Tab` key
+- **Cross-posting** - Post to all platforms at once with `Shift+P`
 - **Vim-style navigation** - `h`, `j`, `k`, `l` for intuitive movement
 - **Two-panel layout** - Threads list on left, detail view on right (swappable)
 - **Thread feed** - View your threads with auto-refresh every 15 seconds
@@ -33,6 +40,8 @@ This is a Cargo workspace with two binaries and a shared library:
 
 ## Installation
 
+**[Latest Release](https://github.com/pgray/ndl/releases)**
+
 ```bash
 cargo install ndl
 ```
@@ -45,18 +54,52 @@ cd ndl
 cargo build --release --workspace
 ```
 
-On Linux, the build uses [wild](https://github.com/davidlattimore/wild) linker for faster builds. Install with `cargo install wild-linker` and ensure `clang` is available.
+On Linux, the build uses [wild](https://github.com/davidlattimore/wild) linker for faster builds.
+
+Install with `cargo install wild-linker` and ensure `clang` is available.
 
 ## Configuration
 
-needle requires a Threads API access token. See [OAUTH.md](OAUTH.md) for detailed setup instructions.
+needle supports both Threads and Bluesky. You can configure one or both platforms.
 
-### Default: Hosted Auth
+### Threads Authentication
+
+See [OAUTH.md](OAUTH.md) for detailed Threads API setup instructions.
+
+#### Default: Hosted Auth
 
 By default, ndl uses the hosted auth server at `ndl.pgray.dev` - no setup required:
 
 ```bash
-ndl login
+ndl login          # Login to Threads
+# or
+ndl login threads  # Explicitly specify Threads
+```
+
+### Bluesky Authentication
+
+Bluesky uses username/password authentication:
+
+```bash
+ndl login bluesky
+```
+
+You'll be prompted for:
+
+- **Identifier**: Your handle (e.g., `user.bsky.social`) or email
+- **Password**: Your password or an [app-specific password](https://bsky.app/settings/app-passwords) (recommended)
+
+Credentials are saved to `~/.config/ndl/config.json`:
+
+```json
+{
+  "access_token": "...",
+  "bluesky": {
+    "identifier": "user.bsky.social",
+    "password": "your-app-password",
+    "session": "..."
+  }
+}
 ```
 
 ### Custom Auth Server
@@ -68,8 +111,8 @@ To use a different auth server:
 export NDL_OAUTH_ENDPOINT=https://your-ndld-server.com
 ndl login
 
-# Or add to ~/.config/ndl/config.toml:
-# auth_server = "https://your-ndld-server.com"
+# Or add to ~/.config/ndl/config.json:
+# "auth_server": "https://your-ndld-server.com"
 ```
 
 ### Local OAuth
@@ -96,7 +139,7 @@ ndl logout
 ndl --version
 ```
 
-Config is stored at `~/.config/ndl/config.toml`.
+Config is stored at `~/.config/ndl/config.json`.
 
 ## Running the Auth Server (ndld)
 
@@ -205,24 +248,37 @@ The server exposes:
 ndl
 ```
 
+When you have multiple platforms configured, ndl automatically enters multi-platform mode. You'll see platform indicators in the status bar (e.g., `[Threads] Bluesky`) showing which platform is currently active (in brackets).
+
+### Multi-Platform Mode
+
+- **Switch platforms**: Press `Tab` to toggle between configured platforms
+- **Cross-post**: Press `Shift+P` to post to all platforms simultaneously
+- **Per-platform timelines**: Each platform maintains its own timeline and state
+- **Selective login**: You can use just Threads, just Bluesky, or both
+
 ### Keybindings
 
-| Key         | Action                   |
-| ----------- | ------------------------ |
-| `j`/`Down`  | Move down                |
-| `k`/`Up`    | Move up                  |
-| `h`/`Left`  | Focus threads panel      |
-| `l`/`Right` | Focus detail panel       |
-| `t`         | Swap panel positions     |
-| `p`         | Post new thread          |
-| `r`         | Reply to selected thread |
-| `R`         | Refresh feed             |
-| `Enter`     | Select / focus detail    |
-| `Esc`       | Back / cancel            |
-| `?`         | Toggle help              |
-| `q`         | Quit                     |
+| Key         | Action                           |
+| ----------- | -------------------------------- |
+| `j`/`Down`  | Move down                        |
+| `k`/`Up`    | Move up                          |
+| `h`/`Left`  | Focus threads panel              |
+| `l`/`Right` | Focus detail panel               |
+| `t`         | Swap panel positions             |
+| `p`         | Post new thread                  |
+| `P`         | Cross-post to all platforms      |
+| `r`         | Reply to selected thread         |
+| `R`         | Refresh feed                     |
+| `Tab`/`]`   | Switch platform (multi-platform) |
+| `Enter`     | Select / focus detail            |
+| `Esc`       | Back / cancel                    |
+| `?`         | Toggle help                      |
+| `q`         | Quit                             |
 
 ## Roadmap
+
+### Core Features
 
 - [x] OAuth login with auto-generated localhost certs
 - [x] Hosted OAuth server (ndld) for secure credential management
@@ -231,8 +287,23 @@ ndl
 - [x] Reply to threads
 - [x] Post new threads
 - [x] Auto-refresh (15s)
+
+### Multi-Platform Support
+
+- [x] Platform abstraction layer
+- [x] Bluesky integration (AT Protocol)
+- [x] Platform switching UI
+- [x] Cross-posting to multiple platforms
+- [x] Per-platform state management
+- [x] Session persistence for Bluesky
+- [x] Full post text extraction for Bluesky
+- [x] Bluesky reply support with proper threading
+
+### Future Enhancements
+
 - [ ] Like/repost actions
 - [ ] Media preview (images)
+- [ ] More platforms (Mastodon, etc.)
 
 ## Privacy
 
@@ -244,6 +315,18 @@ MIT
 
 ## References
 
+### APIs & Protocols
+
 - [Threads API docs](https://developers.facebook.com/docs/threads)
+- [AT Protocol](https://atproto.com/) - Bluesky's underlying protocol
+- [Bluesky API docs](https://docs.bsky.app/)
+- [ATrium](https://github.com/sugyan/atrium) - Rust AT Protocol SDK
+
+### Libraries
+
 - [ratatui](https://docs.rs/ratatui/latest/ratatui/index.html) - TUI framework
+- [bsky-sdk](https://crates.io/crates/bsky-sdk) - Bluesky Rust SDK
+
+### Other
+
 - [initial human written readme](./README.human.md)

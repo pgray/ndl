@@ -12,6 +12,8 @@ description = "OAuth server for ndl - handles Threads authentication"
 axum = "0.8"
 axum-server = { version = "0.8", features = ["tls-rustls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal"] }
+tower = "0.5"
+tower_governor = "0.8"
 
 # ACME / Let's Encrypt
 rustls-acme = { version = "0.15", features = ["axum", "ring"] }
@@ -44,7 +46,6 @@ urlencoding = "2"
 maud = { version = "0.27", features = ["axum"] }
 
 # Shared library
-ndl-core = { path = "../ndl-core", version = "0.1.11" }
+ndl-core = { path = "../ndl-core", version = "0.2.1" }
 
 [dev-dependencies]
-tower = "0.5"

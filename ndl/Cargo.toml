@@ -22,8 +22,13 @@ axum-server = { version = "0.7", features = ["tls-rustls"] }
 # HTTP client
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
+# Bluesky SDK
+bsky-sdk = "0.1"
+atrium-api = "0.25"
+
 # Async utilities
 futures = "0.3"
+async-trait = "0.1"
 
 # Utilities
 serde = { version = "1", features = ["derive"] }
@@ -40,4 +45,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 
 # Shared library
-ndl-core = { path = "../ndl-core", version = "0.1.11" }
+ndl-core = { path = "../ndl-core", version = "0.2.1" }
+
+[dev-dependencies]
+chrono = "0.4"

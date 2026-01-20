@@ -1,8 +1,11 @@
+use async_trait::async_trait;
 use futures::future::join_all;
 use reqwest::Client;
 use serde::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;
+
+use crate::platform::{PlatformError, Post, ReplyThread as PlatformReplyThread, SocialClient};
 
 const BASE_URL: &str = "https://graph.threads.net";
 
@@ -390,4 +393,61 @@ impl ThreadsClient {
 
         Ok(response.json().await?)
     }
+}
+
+// Implement the platform abstraction trait for ThreadsClient
+#[async_trait]
+impl SocialClient for ThreadsClient {
+    async fn get_posts(&self, limit: Option<u32>) -> Result<Vec<Post>, PlatformError> {
+        let response = self.get_threads(limit).await?;
+        Ok(response
+            .data
+            .into_iter()
+            .map(|t| Post {
+                id: t.id,
+                text: t.text,
+                author_handle: t.username,
+                timestamp: t.timestamp,
+                permalink: t.permalink,
+                media_type: t.media_type,
+            })
+            .collect())
+    }
+
+    async fn get_post_replies(
+        &self,
+        post_id: &str,
+        depth: u8,
+    ) -> Result<Vec<PlatformReplyThread>, PlatformError> {
+        let replies = self.get_thread_replies_nested(post_id, depth).await?;
+        Ok(convert_reply_threads(replies))
+    }
+
+    async fn create_post(&self, text: &str) -> Result<(), PlatformError> {
+        self.post_thread(text).await?;
+        Ok(())
+    }
+
+    async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<(), PlatformError> {
+        self.reply_to_thread(post_id, text).await?;
+        Ok(())
+    }
+}
+
+// Helper to convert Threads reply threads to platform reply threads
+fn convert_reply_threads(threads: Vec<ReplyThread>) -> Vec<PlatformReplyThread> {
+    threads
+        .into_iter()
+        .map(|rt| PlatformReplyThread {
+            post: Post {
+                id: rt.thread.id,
+                text: rt.thread.text,
+                author_handle: rt.thread.username,
+                timestamp: rt.thread.timestamp,
+                permalink: rt.thread.permalink,
+                media_type: rt.thread.media_type,
+            },
+            replies: convert_reply_threads(rt.replies),
+        })
+        .collect()
 }
