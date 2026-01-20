@@ -207,7 +207,18 @@ pub async fn index() -> Markup {
 
                     div.install {
                         h2 { "Install ndl" }
-                        p { "Install with cargo:" }
+                        p {
+                            "Download a pre-built binary from "
+                            a href="https://github.com/pgray/ndl/releases" { "GitHub Releases" }
+                            ":"
+                        }
+                        ul.platforms {
+                            li { "Linux x86_64 (static)" }
+                            li { "Linux ARM64 (static)" }
+                            li { "macOS Intel" }
+                            li { "macOS Apple Silicon" }
+                        }
+                        p { "Or install with cargo:" }
                         pre { code { "cargo install ndl" } }
                         p { "Or build from source:" }
                         pre { code { "git clone https://github.com/pgray/ndl\ncd ndl\ncargo install --path ndl" } }
@@ -331,6 +342,21 @@ const LANDING_CSS: &str = r#"
         border-radius: 12px;
         padding: 1.5rem;
         margin-bottom: 2rem;
+    }
+    .platforms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        list-style: none;
+        padding: 0;
+        margin: 0.75rem 0;
+    }
+    .platforms li {
+        background: rgba(0,0,0,0.3);
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        color: #00d4aa;
     }
     pre {
         background: rgba(0,0,0,0.4);
