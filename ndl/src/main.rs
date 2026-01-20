@@ -6,7 +6,10 @@ mod platform;
 mod tui;
 
 use api::ThreadsClient;
+use bluesky::BlueskyClient;
 use config::Config;
+use platform::{Platform, SocialClient};
+use std::collections::HashMap;
 use std::env;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use tui::App;
@@ -47,11 +50,30 @@ async fn main() {
             print_version();
         }
         Some("login") => {
-            tracing::info!("login command");
-            if let Err(e) = run_login().await {
-                tracing::error!("Login failed: {}", e);
-                eprintln!("Login failed: {}", e);
-                std::process::exit(1);
+            // Check if a platform is specified
+            let platform = args.get(2).map(|s| s.as_str());
+            match platform {
+                Some("bluesky") | Some("bsky") => {
+                    tracing::info!("login bluesky command");
+                    if let Err(e) = run_bluesky_login().await {
+                        tracing::error!("Bluesky login failed: {}", e);
+                        eprintln!("Bluesky login failed: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+                Some("threads") | None => {
+                    tracing::info!("login threads command");
+                    if let Err(e) = run_login().await {
+                        tracing::error!("Login failed: {}", e);
+                        eprintln!("Login failed: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+                Some(platform) => {
+                    eprintln!("Unknown platform: {}", platform);
+                    eprintln!("Supported platforms: threads, bluesky");
+                    std::process::exit(1);
+                }
             }
         }
         Some("logout") => {
@@ -68,76 +90,11 @@ async fn main() {
             std::process::exit(1);
         }
         None => {
-            // Check auth status, auto-login if needed
-            let config = match Config::load() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("Failed to load config: {}", e);
-                    eprintln!("Failed to load config: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if !config.is_authenticated() {
-                // Auto-login on first run
-                tracing::info!("No token found, starting auto-login");
-                println!("No access token found. Starting login...");
-                if let Err(e) = run_login().await {
-                    tracing::error!("Login failed: {}", e);
-                    eprintln!("Login failed: {}", e);
-                    std::process::exit(1);
-                }
-            }
-
-            // Reload config after potential login
-            let config = Config::load().expect("Failed to reload config");
-            let token = config.access_token.expect("No token after login");
-            let client = ThreadsClient::new(token);
-
-            // Fetch initial data
-            tracing::debug!("Fetching threads");
-            let (client, threads) = match client.get_threads(Some(25)).await {
-                Ok(resp) => {
-                    tracing::debug!("Fetched {} threads", resp.data.len());
-                    (client, resp.data)
-                }
-                Err(e) if is_auth_error(&e.to_string()) => {
-                    tracing::warn!("Token expired or invalid, re-authenticating...");
-                    eprintln!("Token expired. Re-authenticating...");
-                    if let Err(e) = run_login().await {
-                        tracing::error!("Login failed: {}", e);
-                        eprintln!("Login failed: {}", e);
-                        std::process::exit(1);
-                    }
-                    // Reload with new token
-                    let config = Config::load().expect("Failed to reload config");
-                    let token = config.access_token.expect("No token after login");
-                    let client = ThreadsClient::new(token);
-                    match client.get_threads(Some(25)).await {
-                        Ok(resp) => (client, resp.data),
-                        Err(e) => {
-                            tracing::error!("Failed to fetch threads after re-auth: {}", e);
-                            eprintln!("Failed to fetch threads: {}", e);
-                            (client, Vec::new())
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to fetch threads: {}", e);
-                    eprintln!("Failed to fetch threads: {}", e);
-                    (client, Vec::new())
-                }
-            };
-
-            // Run TUI
-            tracing::info!("Starting TUI");
-            let mut app = App::new(client, threads);
-            if let Err(e) = app.run().await {
+            if let Err(e) = run_tui().await {
                 tracing::error!("TUI error: {}", e);
-                eprintln!("TUI error: {}", e);
+                eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
-            tracing::info!("TUI exited");
         }
     }
 }
@@ -203,13 +160,160 @@ fn print_version() {
     println!("ndl {} ({})", VERSION, GIT_VERSION);
 }
 
+async fn run_bluesky_login() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::{self, Write};
+
+    println!("Bluesky Login");
+    println!("=============");
+    println!();
+    println!("You can use your handle (e.g., user.bsky.social) or email as identifier.");
+    println!("For enhanced security, consider using an app-specific password:");
+    println!("https://bsky.app/settings/app-passwords");
+    println!();
+
+    // Prompt for identifier
+    print!("Identifier (handle or email): ");
+    io::stdout().flush()?;
+    let mut identifier = String::new();
+    io::stdin().read_line(&mut identifier)?;
+    let identifier = identifier.trim().to_string();
+
+    if identifier.is_empty() {
+        return Err("Identifier cannot be empty".into());
+    }
+
+    // Prompt for password
+    print!("Password (or app password): ");
+    io::stdout().flush()?;
+    let mut password = String::new();
+    io::stdin().read_line(&mut password)?;
+    let password = password.trim().to_string();
+
+    if password.is_empty() {
+        return Err("Password cannot be empty".into());
+    }
+
+    // Test login
+    println!();
+    println!("Authenticating...");
+    match BlueskyClient::login(&identifier, &password).await {
+        Ok(_) => {
+            println!("✓ Authentication successful!");
+
+            // Save to config
+            let mut config = Config::load()?;
+            config.bluesky = Some(config::BlueskyConfig {
+                identifier,
+                password,
+                session: None,
+            });
+            config.save()?;
+
+            println!("Credentials saved to {:?}", Config::path()?);
+            println!();
+            println!("You can now use ndl with Bluesky!");
+            Ok(())
+        }
+        Err(e) => {
+            Err(format!("Authentication failed: {}", e).into())
+        }
+    }
+}
+
+async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::load()?;
+
+    let mut clients: HashMap<Platform, Box<dyn SocialClient>> = HashMap::new();
+    let mut legacy_client = None;
+    let mut legacy_threads = Vec::new();
+
+    // Initialize Threads if configured
+    if config.has_threads() {
+        let token = config.access_token.clone().unwrap();
+        let client = ThreadsClient::new(token.clone());
+
+        // Try to fetch initial data for Threads
+        match client.get_threads(Some(25)).await {
+            Ok(resp) => {
+                tracing::debug!("Fetched {} threads from Threads", resp.data.len());
+                legacy_threads = resp.data.clone();
+                clients.insert(Platform::Threads, Box::new(ThreadsClient::new(token)));
+            }
+            Err(e) if is_auth_error(&e.to_string()) => {
+                tracing::warn!("Threads token expired, skipping");
+                eprintln!("Warning: Threads token expired. Run 'ndl login threads' to re-authenticate.");
+            }
+            Err(e) => {
+                tracing::error!("Failed to fetch threads from Threads: {}", e);
+                eprintln!("Warning: Failed to connect to Threads: {}", e);
+                // Still add the client even if fetch failed
+                clients.insert(Platform::Threads, Box::new(ThreadsClient::new(token.clone())));
+                legacy_client = Some(ThreadsClient::new(token));
+            }
+        }
+
+        if legacy_client.is_none() && config.has_threads() {
+            legacy_client = Some(ThreadsClient::new(config.access_token.clone().unwrap()));
+        }
+    }
+
+    // Initialize Bluesky if configured
+    if config.has_bluesky() {
+        let bsky_config = config.bluesky.clone().unwrap();
+        match BlueskyClient::login(&bsky_config.identifier, &bsky_config.password).await {
+            Ok(client) => {
+                tracing::info!("Successfully connected to Bluesky");
+                clients.insert(Platform::Bluesky, Box::new(client));
+            }
+            Err(e) => {
+                tracing::error!("Failed to connect to Bluesky: {}", e);
+                eprintln!("Warning: Failed to connect to Bluesky: {}", e);
+                eprintln!("Run 'ndl login bluesky' to update credentials.");
+            }
+        }
+    }
+
+    // Check if we have any platforms configured
+    if clients.is_empty() {
+        if !config.has_threads() && !config.has_bluesky() {
+            eprintln!("No platforms configured. Run one of:");
+            eprintln!("  ndl login          - Login to Threads");
+            eprintln!("  ndl login bluesky  - Login to Bluesky");
+            return Ok(());
+        }
+        eprintln!("Failed to connect to any platform.");
+        return Ok(());
+    }
+
+    // Create and run the app
+    tracing::info!("Starting TUI with {} platform(s)", clients.len());
+    let mut app = if clients.len() > 1 || (clients.len() == 1 && !clients.contains_key(&Platform::Threads)) {
+        // Use multi-platform mode
+        App::new_multi_platform(clients)
+    } else {
+        // Use legacy single-platform mode (Threads only)
+        let client = legacy_client.unwrap_or_else(|| {
+            ThreadsClient::new(config.access_token.unwrap())
+        });
+        App::new(client, legacy_threads)
+    };
+
+    app.run().await?;
+    tracing::info!("TUI exited");
+    Ok(())
+}
+
 fn print_usage() {
     println!("Usage: ndl [command]");
     println!();
     println!("Commands:");
-    println!("  login     Authenticate with Threads");
-    println!("  logout    Remove saved access token");
-    println!("  --version Show version information");
+    println!("  login [platform]  Authenticate (platforms: threads, bluesky)");
+    println!("  logout            Remove saved access token");
+    println!("  --version         Show version information");
+    println!();
+    println!("Examples:");
+    println!("  ndl login         - Login to Threads (default)");
+    println!("  ndl login bluesky - Login to Bluesky");
     println!();
     println!("Run without arguments to start the TUI.");
 }

@@ -268,10 +268,26 @@ impl App {
     }
 
     fn draw_status_bar(&self, frame: &mut Frame, area: Rect) {
-        let status = self
+        let mut status = self
             .status_message
             .as_deref()
-            .unwrap_or("? for help | p to post | r to reply | R to refresh");
+            .unwrap_or("? for help | p to post | r to reply | R to refresh")
+            .to_string();
+
+        // Add platform indicator if multi-platform mode is active
+        if !self.clients.is_empty() {
+            let platforms: Vec<String> = self.clients.keys()
+                .map(|p| {
+                    if *p == self.current_platform {
+                        format!("[{}]", p) // Active platform in brackets
+                    } else {
+                        p.to_string()
+                    }
+                })
+                .collect();
+            let platform_str = platforms.join(" ");
+            status = format!("{} | {}", platform_str, status);
+        }
 
         let style = if self.status_message.is_some() {
             Style::default().fg(Color::Yellow)
@@ -320,8 +336,8 @@ impl App {
 
     fn draw_help(&self, frame: &mut Frame) {
         let area = frame.area();
-        let popup_width = 42;
-        let popup_height = 17;
+        let popup_width = 48;
+        let popup_height = 19;
         let popup_area = Rect {
             x: area.width.saturating_sub(popup_width) / 2,
             y: area.height.saturating_sub(popup_height) / 2,
@@ -336,8 +352,10 @@ h / Left     Focus left panel
 l / Right    Focus right panel
 t            Swap panel positions
 p            Create new post
+P            Cross-post to all platforms
 r            Reply to thread or reply
 R            Refresh threads
+Tab          Switch platform (multi-platform)
 Enter        Select item
 Esc          Back / Cancel / Deselect
 q            Quit
@@ -648,7 +666,9 @@ q            Quit
             KeyCode::Char('t') => self.toggle_panel(),
             KeyCode::Char('r') => self.start_reply(),
             KeyCode::Char('p') => self.start_post(),
+            KeyCode::Char('P') => self.start_cross_post(), // Shift+P for cross-post
             KeyCode::Char('R') => self.refresh_threads().await,
+            KeyCode::Tab => self.toggle_platform(),
             KeyCode::Char('j') | KeyCode::Down => self.move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.move_up(),
             KeyCode::Char('h') | KeyCode::Left => self.move_left(),
@@ -668,6 +688,21 @@ q            Quit
 
     fn start_post(&mut self) {
         self.input_mode = InputMode::Posting;
+        self.input_buffer.clear();
+    }
+
+    fn start_cross_post(&mut self) {
+        if self.clients.is_empty() {
+            self.status_message = Some("No platforms available for cross-posting".to_string());
+            return;
+        }
+
+        if self.clients.len() < 2 {
+            self.status_message = Some("Cross-posting requires multiple platforms configured".to_string());
+            return;
+        }
+
+        self.input_mode = InputMode::CrossPosting;
         self.input_buffer.clear();
     }
 
