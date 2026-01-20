@@ -359,13 +359,13 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
                 tracing::info!("Successfully connected to Bluesky");
 
                 // Update session in config for next time
-                if let Ok(new_session) = client.get_session().await {
-                    if bsky_config.session.as_ref() != Some(&new_session) {
-                        bsky_config.session = Some(new_session);
-                        let mut config_mut = Config::load().unwrap_or_default();
-                        config_mut.bluesky = Some(bsky_config);
-                        let _ = config_mut.save(); // Best effort, don't fail if this errors
-                    }
+                if let Ok(new_session) = client.get_session().await
+                    && bsky_config.session.as_ref() != Some(&new_session)
+                {
+                    bsky_config.session = Some(new_session);
+                    let mut config_mut = Config::load().unwrap_or_default();
+                    config_mut.bluesky = Some(bsky_config);
+                    let _ = config_mut.save(); // Best effort, don't fail if this errors
                 }
 
                 clients.insert(Platform::Bluesky, Box::new(client));

@@ -99,7 +99,7 @@ impl BlueskyClient {
                     permalink: Some(format!(
                         "https://bsky.app/profile/{}/post/{}",
                         post_view.author.handle.as_str(),
-                        post_view.uri.to_string().split('/').last().unwrap_or("")
+                        post_view.uri.split('/').next_back().unwrap_or("")
                     )),
                     media_type: None,
                 };
@@ -220,13 +220,7 @@ impl SocialClient for BlueskyClient {
                     permalink: Some(format!(
                         "https://bsky.app/profile/{}/post/{}",
                         feed_view.post.author.handle.as_str(),
-                        feed_view
-                            .post
-                            .uri
-                            .to_string()
-                            .split('/')
-                            .last()
-                            .unwrap_or("")
+                        feed_view.post.uri.split('/').next_back().unwrap_or("")
                     )),
                     media_type: None,
                 }
@@ -252,7 +246,7 @@ impl SocialClient for BlueskyClient {
                     uri: post_id.to_string(),
                     depth: Some(
                         atrium_api::types::LimitedU16::try_from(depth as u16)
-                            .unwrap_or_else(|_| atrium_api::types::LimitedU16::MAX),
+                            .unwrap_or(atrium_api::types::LimitedU16::MAX),
                     ),
                     parent_height: None,
                 }
