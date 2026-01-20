@@ -16,6 +16,8 @@ pub enum ConfigError {
 pub struct Config {
     // Threads credentials
     pub access_token: Option<String>,
+    /// Unix timestamp (seconds since epoch) when the access token expires
+    pub token_expires_at: Option<u64>,
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     /// Optional auth server URL for hosted OAuth flow
@@ -99,6 +101,32 @@ impl Config {
     pub fn has_threads(&self) -> bool {
         self.access_token.is_some()
     }
+
+    /// Check if the Threads token needs refreshing (within 27 days of expiration or already expired)
+    pub fn should_refresh_token(&self) -> bool {
+        if let Some(expires_at) = self.token_expires_at {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Refresh if token expires within 27 days (or is already expired)
+            let days_27_in_seconds = 27 * 24 * 60 * 60;
+            expires_at <= now + days_27_in_seconds
+        } else {
+            // If we don't have expiration info, assume we should refresh
+            self.access_token.is_some()
+        }
+    }
+
+    /// Calculate expiration timestamp from current time and expires_in seconds
+    pub fn calculate_expiration(expires_in: u64) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + expires_in
+    }
 }
 
 #[cfg(test)]
@@ -110,6 +138,7 @@ mod tests {
         // Create a config with both Threads and Bluesky
         let mut config = Config {
             access_token: Some("old_threads_token".to_string()),
+            token_expires_at: None,
             client_id: None,
             client_secret: None,
             auth_server: None,
@@ -136,6 +165,7 @@ mod tests {
     fn test_config_serialization_roundtrip() {
         let config = Config {
             access_token: Some("threads_token".to_string()),
+            token_expires_at: None,
             client_id: None,
             client_secret: None,
             auth_server: None,

@@ -43,16 +43,22 @@ impl OAuthConfig {
         )
     }
 
-    /// Exchange an authorization code for an access token
+    /// Exchange an authorization code for an access token, then upgrade to long-lived
     pub async fn exchange_code(&self, code: &str) -> Result<TokenResponse, OAuthError> {
-        ndl_core::exchange_code(
+        // First, exchange code for short-lived token
+        let short_lived = ndl_core::exchange_code(
             &self.client_id,
             &self.client_secret,
             &self.redirect_uri,
             code,
         )
         .await
-        .map_err(|e| OAuthError::TokenExchange(e.to_string()))
+        .map_err(|e| OAuthError::TokenExchange(e.to_string()))?;
+
+        // Then, exchange short-lived token for long-lived token (60 days)
+        ndl_core::exchange_for_long_lived_token(&self.client_secret, &short_lived.access_token)
+            .await
+            .map_err(|e| OAuthError::TokenExchange(e.to_string()))
     }
 }
 
@@ -291,6 +297,7 @@ pub async fn hosted_login(auth_server: &str) -> Result<TokenResponse, OAuthError
                 return Ok(TokenResponse {
                     access_token,
                     user_id: 0, // Not provided by hosted auth
+                    expires_in: Some(60 * 24 * 60 * 60), // Assume 60 days for long-lived token
                 });
             }
             PollStatus::Failed { error } => {
