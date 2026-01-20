@@ -10,24 +10,49 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build-linux:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build
+        run: |
+          rm -f .cargo/config.toml
+          cross build --release --target ${{ matrix.target }} -p ndl
+
+      - name: Package
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../ndl-${{ matrix.target }}.tar.gz ndl
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ndl-${{ matrix.target }}
+          path: ndl-${{ matrix.target }}.tar.gz
+
+  build-macos:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            binary: ndl
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-            binary: ndl
           - target: x86_64-apple-darwin
             os: macos-13
-            binary: ndl
           - target: aarch64-apple-darwin
             os: macos-14
-            binary: ndl
 
     steps:
       - uses: actions/checkout@v5
@@ -40,42 +65,25 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      # Linux: install musl tools
-      - name: Install musl tools
-        if: contains(matrix.target, 'linux-musl')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          # For aarch64 cross-compilation
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-            mkdir -p ~/.cargo
-            cat >> ~/.cargo/config.toml << 'EOF'
-          [target.aarch64-unknown-linux-musl]
-          linker = "aarch64-linux-gnu-gcc"
-          EOF
-          fi
-
       - name: Build
         run: |
-          # Remove wild linker config (not available in CI)
           rm -f .cargo/config.toml
           cargo build --release --target ${{ matrix.target }} -p ndl
 
       - name: Package
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../ndl-${{ matrix.target }}.tar.gz ${{ matrix.binary }}
+          tar czf ../../../ndl-${{ matrix.target }}.tar.gz ndl
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ndl-${{ matrix.target }}
           path: ndl-${{ matrix.target }}.tar.gz
 
   release:
     name: Create Release
-    needs: build
+    needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -85,7 +93,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
