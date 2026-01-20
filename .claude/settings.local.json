@@ -4,7 +4,10 @@
       "Bash(cargo build:*)",
       "Bash(cargo search:*)",
       "WebFetch(domain:crates.io)",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "Bash(find:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)"
     ]
   }
 }

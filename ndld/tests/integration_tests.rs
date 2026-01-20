@@ -4,7 +4,7 @@ use axum::{
 };
 use ndld::{
     auth::{OAuthConfig, SessionStore},
-    routes::{AppState, create_router},
+    routes::{AppState, create_test_router},
 };
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -23,7 +23,7 @@ fn create_test_state() -> Arc<AppState> {
 #[tokio::test]
 async fn test_health_endpoint() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(
@@ -50,7 +50,7 @@ async fn test_health_endpoint() {
 #[tokio::test]
 async fn test_index_page() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
@@ -71,7 +71,7 @@ async fn test_index_page() {
 #[tokio::test]
 async fn test_start_auth() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(
@@ -109,7 +109,7 @@ async fn test_poll_pending_session() {
     let session = state.sessions.create_session();
     let session_id = session.id.clone();
 
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(
@@ -134,7 +134,7 @@ async fn test_poll_pending_session() {
 #[tokio::test]
 async fn test_poll_nonexistent_session() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(
@@ -159,7 +159,7 @@ async fn test_poll_nonexistent_session() {
 #[tokio::test]
 async fn test_callback_missing_state() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(
@@ -184,7 +184,7 @@ async fn test_callback_missing_state() {
 #[tokio::test]
 async fn test_callback_invalid_session() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(
@@ -214,7 +214,7 @@ async fn test_callback_oauth_error() {
     let session = state.sessions.create_session();
     let session_id = session.id.clone();
 
-    let app = create_router(Arc::clone(&state));
+    let app = create_test_router(Arc::clone(&state));
 
     let response = app
         .oneshot(
@@ -239,7 +239,7 @@ async fn test_callback_oauth_error() {
     assert!(html.contains("User denied access"));
 
     // Verify session state was updated to failed
-    let app = create_router(state);
+    let app = create_test_router(state);
     let poll_response = app
         .oneshot(
             Request::builder()
@@ -267,7 +267,7 @@ async fn test_callback_oauth_error() {
 #[tokio::test]
 async fn test_privacy_policy_page() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(
@@ -292,7 +292,7 @@ async fn test_privacy_policy_page() {
 #[tokio::test]
 async fn test_tos_page() {
     let state = create_test_state();
-    let app = create_router(state);
+    let app = create_test_router(state);
 
     let response = app
         .oneshot(Request::builder().uri("/tos").body(Body::empty()).unwrap())

@@ -104,6 +104,14 @@ const DEFAULT_OAUTH_ENDPOINT: &str = "https://ndl.pgray.dev";
 async fn run_login() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = Config::load()?;
 
+    // Preserve existing Bluesky config
+    let existing_bluesky = config.bluesky.clone();
+    tracing::debug!(
+        "Loaded config - has_bluesky: {}, has_threads: {}",
+        config.has_bluesky(),
+        config.has_threads()
+    );
+
     // Determine auth server: env var > config > default
     // Empty string means "use local OAuth"
     let auth_server = env::var("NDL_OAUTH_ENDPOINT")
@@ -140,6 +148,18 @@ async fn run_login() -> Result<(), Box<dyn std::error::Error>> {
     // Save token to config
     tracing::info!("Login successful, saving token");
     config.access_token = Some(token.access_token);
+
+    // Ensure Bluesky config is preserved
+    if config.bluesky.is_none() && existing_bluesky.is_some() {
+        tracing::warn!("Bluesky config was lost during login, restoring");
+        config.bluesky = existing_bluesky;
+    }
+
+    tracing::debug!(
+        "Saving config - has_bluesky: {}, has_threads: {}",
+        config.has_bluesky(),
+        config.has_threads()
+    );
     config.save()?;
 
     println!("Token saved to {:?}", Config::path()?);
@@ -203,13 +223,32 @@ async fn run_bluesky_login() -> Result<(), Box<dyn std::error::Error>> {
             // Get and save session data
             let session = client.get_session().await.ok();
 
-            // Save to config
+            // Save to config (preserving existing Threads config)
             let mut config = Config::load()?;
+            let existing_threads = config.access_token.clone();
+            tracing::debug!(
+                "Loaded config - has_bluesky: {}, has_threads: {}",
+                config.has_bluesky(),
+                config.has_threads()
+            );
+
             config.bluesky = Some(config::BlueskyConfig {
                 identifier,
                 password,
                 session,
             });
+
+            // Ensure Threads config is preserved
+            if config.access_token.is_none() && existing_threads.is_some() {
+                tracing::warn!("Threads config was lost during Bluesky login, restoring");
+                config.access_token = existing_threads;
+            }
+
+            tracing::debug!(
+                "Saving config - has_bluesky: {}, has_threads: {}",
+                config.has_bluesky(),
+                config.has_threads()
+            );
             config.save()?;
 
             println!("Credentials saved to {:?}", Config::path()?);
@@ -217,9 +256,7 @@ async fn run_bluesky_login() -> Result<(), Box<dyn std::error::Error>> {
             println!("You can now use ndl with Bluesky!");
             Ok(())
         }
-        Err(e) => {
-            Err(format!("Authentication failed: {}", e).into())
-        }
+        Err(e) => Err(format!("Authentication failed: {}", e).into()),
     }
 }
 
@@ -244,13 +281,18 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(e) if is_auth_error(&e.to_string()) => {
                 tracing::warn!("Threads token expired, skipping");
-                eprintln!("Warning: Threads token expired. Run 'ndl login threads' to re-authenticate.");
+                eprintln!(
+                    "Warning: Threads token expired. Run 'ndl login threads' to re-authenticate."
+                );
             }
             Err(e) => {
                 tracing::error!("Failed to fetch threads from Threads: {}", e);
                 eprintln!("Warning: Failed to connect to Threads: {}", e);
                 // Still add the client even if fetch failed
-                clients.insert(Platform::Threads, Box::new(ThreadsClient::new(token.clone())));
+                clients.insert(
+                    Platform::Threads,
+                    Box::new(ThreadsClient::new(token.clone())),
+                );
                 legacy_client = Some(ThreadsClient::new(token));
             }
         }
@@ -322,16 +364,16 @@ async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create and run the app
     tracing::info!("Starting TUI with {} platform(s)", clients.len());
-    let mut app = if clients.len() > 1 || (clients.len() == 1 && !clients.contains_key(&Platform::Threads)) {
-        // Use multi-platform mode
-        App::new_multi_platform(clients)
-    } else {
-        // Use legacy single-platform mode (Threads only)
-        let client = legacy_client.unwrap_or_else(|| {
-            ThreadsClient::new(config.access_token.unwrap())
-        });
-        App::new(client, legacy_threads)
-    };
+    let mut app =
+        if clients.len() > 1 || (clients.len() == 1 && !clients.contains_key(&Platform::Threads)) {
+            // Use multi-platform mode
+            App::new_multi_platform(clients)
+        } else {
+            // Use legacy single-platform mode (Threads only)
+            let client =
+                legacy_client.unwrap_or_else(|| ThreadsClient::new(config.access_token.unwrap()));
+            App::new(client, legacy_threads)
+        };
 
     app.run().await?;
     tracing::info!("TUI exited");

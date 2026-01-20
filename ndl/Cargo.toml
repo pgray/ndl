@@ -46,3 +46,6 @@ tracing-appender = "0.2"
 
 # Shared library
 ndl-core = { path = "../ndl-core", version = "0.1.11" }
+
+[dev-dependencies]
+chrono = "0.4"

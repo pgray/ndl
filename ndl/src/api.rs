@@ -5,7 +5,10 @@ use serde::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;
 
-use crate::platform::{Platform, PlatformError, Post, PostResult, ReplyThread as PlatformReplyThread, SocialClient, UserProfile as PlatformUserProfile};
+use crate::platform::{
+    Platform, PlatformError, Post, PostResult, ReplyThread as PlatformReplyThread, SocialClient,
+    UserProfile as PlatformUserProfile,
+};
 
 const BASE_URL: &str = "https://graph.threads.net";
 
@@ -448,11 +451,7 @@ impl SocialClient for ThreadsClient {
         })
     }
 
-    async fn reply_to_post(
-        &self,
-        post_id: &str,
-        text: &str,
-    ) -> Result<PostResult, PlatformError> {
+    async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<PostResult, PlatformError> {
         let response = self.reply_to_thread(post_id, text).await?;
         Ok(PostResult {
             id: response.id,

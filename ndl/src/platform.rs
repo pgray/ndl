@@ -92,11 +92,7 @@ pub trait SocialClient: Send + Sync {
     async fn create_post(&self, text: &str) -> Result<PostResult, PlatformError>;
 
     /// Reply to a post
-    async fn reply_to_post(
-        &self,
-        post_id: &str,
-        text: &str,
-    ) -> Result<PostResult, PlatformError>;
+    async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<PostResult, PlatformError>;
 
     /// Clone the client (used for background tasks)
     fn clone_client(&self) -> Box<dyn SocialClient>;
