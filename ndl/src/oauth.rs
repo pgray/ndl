@@ -134,8 +134,6 @@ pub enum OAuthError {
     ServerShutdown,
     #[error("Token exchange failed: {0}")]
     TokenExchange(String),
-    #[error("Failed to open browser: {0}")]
-    BrowserOpen(String),
     #[error("Hosted auth error: {0}")]
     HostedAuth(String),
     #[error("Auth session timeout")]
@@ -152,8 +150,10 @@ pub async fn login(client_id: &str, client_secret: &str) -> Result<TokenResponse
     println!();
     println!("Note: You may need to accept the self-signed certificate warning.");
 
-    // Open browser
-    open::that(&auth_url).map_err(|e| OAuthError::BrowserOpen(e.to_string()))?;
+    // Open browser (don't fail if it doesn't work - user can visit URL manually)
+    if let Err(e) = open::that(&auth_url) {
+        eprintln!("Could not open browser automatically: {}", e);
+    }
 
     // Wait for callback
     println!("Waiting for authorization...");
@@ -251,8 +251,10 @@ pub async fn hosted_login(auth_server: &str) -> Result<TokenResponse, OAuthError
     println!("Opening browser for authorization...");
     println!("If it doesn't open, visit:\n{}", start_resp.auth_url);
 
-    // Open browser
-    open::that(&start_resp.auth_url).map_err(|e| OAuthError::BrowserOpen(e.to_string()))?;
+    // Open browser (don't fail if it doesn't work - user can visit URL manually)
+    if let Err(e) = open::that(&start_resp.auth_url) {
+        eprintln!("Could not open browser automatically: {}", e);
+    }
 
     // Step 3: Poll for completion
     println!("Waiting for authorization...");
