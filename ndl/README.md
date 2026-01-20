@@ -2,7 +2,7 @@
 
 A minimal TUI client for [Threads](https://threads.net) - stay aware of notifications without the distractions of a full social media interface.
 
-![ndl screenshot](https://raw.githubusercontent.com/pgray/ndl/main/pics/srug.png)
+![ndl screenshot](https://raw.githubusercontent.com/pgray/ndl/main/ndl/pics/srug.png)
 
 ## Why needle?
 
@@ -190,6 +190,7 @@ docker run -p 443:443 \
 ```
 
 The server exposes:
+
 - `GET /` - Landing page with project info
 - `GET /privacy-policy` - Privacy policy
 - `GET /tos` - Terms of service
