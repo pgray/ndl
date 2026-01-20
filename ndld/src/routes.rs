@@ -205,6 +205,16 @@ pub async fn index() -> Markup {
                         }
                     }
 
+                    div.install {
+                        h2 { "Install ndl" }
+                        p { "Install with cargo:" }
+                        pre { code { "cargo install ndl" } }
+                        p { "Or build from source:" }
+                        pre { code { "git clone https://github.com/pgray/ndl\ncd ndl\ncargo install --path ndl" } }
+                        p { "Then login:" }
+                        pre { code { "ndl login" } }
+                    }
+
                     div.about {
                         h2 { "Privacy" }
                         p {
@@ -315,6 +325,25 @@ const LANDING_CSS: &str = r#"
     }
     li a:hover {
         text-decoration: underline;
+    }
+    .install {
+        background: rgba(255,255,255,0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    pre {
+        background: rgba(0,0,0,0.4);
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 0.75rem 0;
+        overflow-x: auto;
+    }
+    code {
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        font-size: 0.9rem;
+        color: #00d4aa;
+        white-space: pre;
     }
     .version {
         margin-top: 2rem;
