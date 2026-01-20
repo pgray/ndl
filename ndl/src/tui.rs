@@ -1,4 +1,5 @@
 use crate::api::{ReplyThread, Thread, ThreadsClient};
+use crate::platform::{Platform, Post, ReplyThread as PlatformReplyThread, SocialClient};
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -11,7 +12,9 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
+use std::collections::HashMap;
 use std::io::{self, stdout};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
@@ -26,31 +29,67 @@ pub enum InputMode {
     Normal,
     Replying,
     Posting,
+    CrossPosting, // Post to all platforms
 }
 
 pub enum AppEvent {
+    // Legacy events for backwards compatibility
     ThreadsUpdated(Vec<Thread>),
     ReplyResult(Result<(), String>),
     PostResult(Result<(), String>),
     RepliesLoaded(String, Result<Vec<ReplyThread>, String>), // (thread_id, nested replies or error)
+
+    // Platform-aware events
+    PostsUpdated(Platform, Vec<Post>),
+    PlatformReplyResult(Platform, Result<(), String>),
+    PlatformPostResult(Platform, Result<(), String>),
+    PlatformRepliesLoaded(Platform, String, Result<Vec<PlatformReplyThread>, String>),
+}
+
+/// Platform-specific state
+pub struct PlatformState {
+    pub posts: Vec<Post>,
+    pub list_state: ListState,
+    pub selected_replies: Vec<PlatformReplyThread>,
+    pub loaded_replies_for: Option<String>,
+    pub reply_selection: Option<usize>,
+}
+
+impl PlatformState {
+    fn new() -> Self {
+        Self {
+            posts: Vec::new(),
+            list_state: ListState::default(),
+            selected_replies: Vec::new(),
+            loaded_replies_for: None,
+            reply_selection: None,
+        }
+    }
 }
 
 pub struct App {
     pub running: bool,
     pub active_panel: Panel,
-    pub threads: Vec<Thread>,
-    pub list_state: ListState,
     pub show_help: bool,
     pub swapped_layout: bool,
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub status_message: Option<String>,
-    pub client: ThreadsClient,
     pub event_rx: mpsc::Receiver<AppEvent>,
     pub event_tx: mpsc::Sender<AppEvent>,
+
+    // Multi-platform support
+    pub current_platform: Platform,
+    pub clients: HashMap<Platform, Arc<Box<dyn SocialClient>>>,
+    pub platform_states: HashMap<Platform, PlatformState>,
+
+    // Legacy fields for backwards compatibility
+    pub threads: Vec<Thread>,
+    pub list_state: ListState,
+    pub client: ThreadsClient,
     pub selected_replies: Vec<ReplyThread>,
-    pub loaded_replies_for: Option<String>, // thread_id we've loaded replies for
-    pub reply_selection: Option<usize>,     // index into flattened replies (None = main thread)
+    pub loaded_replies_for: Option<String>,
+    pub reply_selection: Option<usize>,
 }
 
 impl App {
@@ -62,23 +101,97 @@ impl App {
 
         let (event_tx, event_rx) = mpsc::channel(32);
 
+        // Initialize with empty multi-platform support
+        let clients = HashMap::new();
+        let platform_states = HashMap::new();
+
         Self {
             running: true,
             active_panel: Panel::Threads,
-            threads,
-            list_state: state,
             show_help: false,
             swapped_layout: false,
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
             status_message: None,
-            client,
             event_rx,
             event_tx,
+            current_platform: Platform::Threads,
+            clients,
+            platform_states,
+            // Legacy fields
+            threads,
+            list_state: state,
+            client,
             selected_replies: Vec::new(),
             loaded_replies_for: None,
             reply_selection: None,
         }
+    }
+
+    /// Create a new multi-platform app with clients for each platform
+    pub fn new_multi_platform(clients: HashMap<Platform, Box<dyn SocialClient>>) -> Self {
+        let (event_tx, event_rx) = mpsc::channel(32);
+
+        let mut platform_states = HashMap::new();
+        let mut clients_arc = HashMap::new();
+
+        // Initialize state for each platform
+        for (platform, client) in clients {
+            platform_states.insert(platform, PlatformState::new());
+            clients_arc.insert(platform, Arc::new(client));
+        }
+
+        // Pick the first platform as default
+        let current_platform = clients_arc.keys().next().copied().unwrap_or(Platform::Threads);
+
+        // Create a dummy ThreadsClient for legacy compatibility
+        let legacy_client = ThreadsClient::new(String::new());
+
+        Self {
+            running: true,
+            active_panel: Panel::Threads,
+            show_help: false,
+            swapped_layout: false,
+            input_mode: InputMode::Normal,
+            input_buffer: String::new(),
+            status_message: None,
+            event_rx,
+            event_tx,
+            current_platform,
+            clients: clients_arc,
+            platform_states,
+            // Legacy fields
+            threads: Vec::new(),
+            list_state: ListState::default(),
+            client: legacy_client,
+            selected_replies: Vec::new(),
+            loaded_replies_for: None,
+            reply_selection: None,
+        }
+    }
+
+    /// Get the current platform's state
+    fn current_state(&self) -> Option<&PlatformState> {
+        self.platform_states.get(&self.current_platform)
+    }
+
+    /// Get the current platform's state (mutable)
+    fn current_state_mut(&mut self) -> Option<&mut PlatformState> {
+        self.platform_states.get_mut(&self.current_platform)
+    }
+
+    /// Toggle to the next platform
+    fn toggle_platform(&mut self) {
+        let platforms: Vec<Platform> = self.clients.keys().copied().collect();
+        if platforms.len() <= 1 {
+            return;
+        }
+
+        let current_idx = platforms.iter().position(|p| *p == self.current_platform).unwrap_or(0);
+        let next_idx = (current_idx + 1) % platforms.len();
+        self.current_platform = platforms[next_idx];
+
+        self.status_message = Some(format!("Switched to {}", self.current_platform));
     }
 
     pub async fn run(&mut self) -> io::Result<()> {
@@ -147,7 +260,9 @@ impl App {
             self.draw_help(frame);
         }
 
-        if self.input_mode == InputMode::Replying || self.input_mode == InputMode::Posting {
+        if self.input_mode == InputMode::Replying
+            || self.input_mode == InputMode::Posting
+            || self.input_mode == InputMode::CrossPosting {
             self.draw_input(frame);
         }
     }
@@ -187,6 +302,7 @@ impl App {
         let title = match self.input_mode {
             InputMode::Replying => " Reply (Enter to send, Esc to cancel) ",
             InputMode::Posting => " New Post (Enter to send, Esc to cancel) ",
+            InputMode::CrossPosting => " Cross-Post to All (Enter to send, Esc to cancel) ",
             InputMode::Normal => "",
         };
 
@@ -435,6 +551,41 @@ q            Quit
                         }
                     }
                 }
+                AppEvent::PostsUpdated(platform, posts) => {
+                    debug!("Received {} posts for {}", posts.len(), platform);
+                    if let Some(state) = self.platform_states.get_mut(&platform) {
+                        state.posts = posts;
+                        if state.list_state.selected().is_none() && !state.posts.is_empty() {
+                            state.list_state.select(Some(0));
+                        }
+                    }
+                    if platform == self.current_platform {
+                        self.status_message = Some(format!("{} refreshed", platform));
+                    }
+                }
+                AppEvent::PlatformPostResult(platform, result) => match result {
+                    Ok(()) => {
+                        info!("Post sent successfully to {}", platform);
+                        self.status_message = Some(format!("Posted to {}!", platform));
+                    }
+                    Err(ref e) => {
+                        error!("Post to {} failed: {}", platform, e);
+                        self.status_message = Some(format!("{} error: {}", platform, e));
+                    }
+                },
+                AppEvent::PlatformReplyResult(platform, result) => match result {
+                    Ok(()) => {
+                        info!("Reply sent successfully to {}", platform);
+                        self.status_message = Some(format!("Replied on {}!", platform));
+                    }
+                    Err(ref e) => {
+                        error!("Reply to {} failed: {}", platform, e);
+                        self.status_message = Some(format!("{} error: {}", platform, e));
+                    }
+                },
+                AppEvent::PlatformRepliesLoaded(_platform, _post_id, _result) => {
+                    // TODO: Implement platform-specific reply loading
+                }
             }
         }
 
@@ -450,7 +601,7 @@ q            Quit
             self.status_message = None;
 
             match self.input_mode {
-                InputMode::Replying | InputMode::Posting => self.handle_input_mode(key.code).await,
+                InputMode::Replying | InputMode::Posting | InputMode::CrossPosting => self.handle_input_mode(key.code).await,
                 InputMode::Normal => self.handle_normal_input(key.code).await,
             }
         }
@@ -464,6 +615,7 @@ q            Quit
                     match self.input_mode {
                         InputMode::Replying => self.send_reply().await,
                         InputMode::Posting => self.send_post().await,
+                        InputMode::CrossPosting => self.send_cross_post().await,
                         InputMode::Normal => {}
                     }
                 }
@@ -563,6 +715,33 @@ q            Quit
                     result.map(|_| ()).map_err(|e| e.to_string()),
                 ))
                 .await;
+        });
+    }
+
+    async fn send_cross_post(&mut self) {
+        let text = self.input_buffer.clone();
+        info!("Cross-posting to all platforms");
+
+        let tx = self.event_tx.clone();
+        let clients = self.clients.clone();
+
+        if clients.is_empty() {
+            self.status_message = Some("No platforms configured for cross-posting".to_string());
+            return;
+        }
+
+        self.status_message = Some(format!("Cross-posting to {} platforms...", clients.len()));
+
+        tokio::spawn(async move {
+            for (platform, client) in clients.iter() {
+                let result = client.create_post(&text).await;
+                let _ = tx
+                    .send(AppEvent::PlatformPostResult(
+                        *platform,
+                        result.map(|_| ()).map_err(|e| e.to_string()),
+                    ))
+                    .await;
+            }
         });
     }
 

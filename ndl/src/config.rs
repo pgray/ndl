@@ -16,11 +16,23 @@ pub enum ConfigError {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Config {
+    // Threads credentials
     pub access_token: Option<String>,
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     /// Optional auth server URL for hosted OAuth flow
     pub auth_server: Option<String>,
+
+    // Bluesky credentials
+    pub bluesky: Option<BlueskyConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlueskyConfig {
+    pub identifier: String,
+    pub password: String,
+    /// Optional: serialized session data for persistence
+    pub session: Option<String>,
 }
 
 impl Config {
@@ -66,5 +78,15 @@ impl Config {
     #[allow(dead_code)]
     pub fn has_credentials(&self) -> bool {
         self.client_id.is_some() && self.client_secret.is_some()
+    }
+
+    /// Check if Bluesky credentials are configured
+    pub fn has_bluesky(&self) -> bool {
+        self.bluesky.is_some()
+    }
+
+    /// Check if Threads is authenticated
+    pub fn has_threads(&self) -> bool {
+        self.access_token.is_some()
     }
 }

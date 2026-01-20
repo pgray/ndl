@@ -22,8 +22,13 @@ axum-server = { version = "0.7", features = ["tls-rustls"] }
 # HTTP client
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
+# Bluesky SDK
+bsky-sdk = "0.1"
+atrium-api = "0.25"
+
 # Async utilities
 futures = "0.3"
+async-trait = "0.1"
 
 # Utilities
 serde = { version = "1", features = ["derive"] }
