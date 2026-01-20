@@ -7,11 +7,9 @@ RUN apt-get update && apt-get install -y \
     musl-tools \
     clang \
     && rm -rf /var/lib/apt/lists/* \
-    && rustup target add x86_64-unknown-linux-musl \
-    && cargo install wild-linker
+    && rustup target add x86_64-unknown-linux-musl
 
 # Copy workspace files
-COPY .cargo .cargo
 COPY Cargo.toml Cargo.lock ./
 COPY ndl ndl
 COPY ndld ndld
@@ -27,6 +25,7 @@ COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/ndld /ndld
 
 ENV NDLD_PORT=8080
 EXPOSE 8080
+EXPOSE 443
 
 # Run as non-root (UID 10001)
 USER 10001:10001
