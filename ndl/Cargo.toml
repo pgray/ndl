@@ -26,6 +26,9 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 bsky-sdk = "0.1"
 atrium-api = "0.25"
 
+# Vendored OpenSSL for cross-compilation (required by bsky-sdk's transitive deps)
+openssl = { version = "0.10", features = ["vendored"] }
+
 # Async utilities
 futures = "0.3"
 async-trait = "0.1"
@@ -45,7 +48,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 
 # Shared library
-ndl-core = { path = "../ndl-core", version = "0.2.2" }
+ndl-core = { path = "../ndl-core", version = "0.2.3" }
 
 [dev-dependencies]
 chrono = "0.4"

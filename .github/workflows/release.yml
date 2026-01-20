@@ -23,20 +23,18 @@ jobs:
       - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
 
-      - name: Install cargo-zigbuild
-        run: pip3 install ziglang cargo-zigbuild
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build
         run: |
           rm -f .cargo/config.toml
-          cargo zigbuild --release --target ${{ matrix.target }} -p ndl
+          cross build --release --target ${{ matrix.target }} -p ndl
 
       - name: Package
         run: |
