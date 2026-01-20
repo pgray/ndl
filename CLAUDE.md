@@ -157,3 +157,7 @@ cargo test --workspace               # Run all tests
 ```
 
 All commands must pass without errors. Clippy warnings should be fixed before committing.
+
+## Updating Dependencies
+
+When adding or removing significant dependencies, update the "Built with" list in `ndld/src/routes.rs` (the landing page at https://ndl.pgray.dev). This list showcases the open source libraries used by the project.
