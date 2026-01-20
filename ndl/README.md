@@ -276,6 +276,14 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 | `?`         | Toggle help                      |
 | `q`         | Quit                             |
 
+## Releasing
+
+```bash
+gh workflow run release.yml -f version=X.Y.Z
+```
+
+This bumps versions, creates a tag, builds binaries, publishes to crates.io, and pushes the Docker image.
+
 ## Roadmap
 
 ### Core Features
