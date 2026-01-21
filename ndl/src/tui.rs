@@ -181,7 +181,8 @@ impl App {
 
             tokio::spawn(async move {
                 loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    // this goes to 11
+                    tokio::time::sleep(std::time::Duration::from_secs(11)).await;
 
                     if let Ok(posts) = client.get_posts(Some(25)).await {
                         let _ = tx.send(AppEvent::PostsUpdated(platform, posts)).await;
