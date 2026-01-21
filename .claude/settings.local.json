@@ -10,7 +10,13 @@
       "Bash(cargo test:*)",
       "Bash(gh run list:*)",
       "Bash(cargo doc:*)",
-      "Bash(cargo clippy:*)"
+      "Bash(cargo clippy:*)",
+      "WebSearch",
+      "WebFetch(domain:developers.facebook.com)",
+      "WebFetch(domain:docs.bsky.app)",
+      "Bash(cargo tree:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
