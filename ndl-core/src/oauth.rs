@@ -5,8 +5,8 @@ pub const TOKEN_URL: &str = "https://graph.threads.net/oauth/access_token";
 pub const OAUTH_SCOPES: &str =
     "threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish";
 
-/// Deserialize user_id from either a string or number (Threads API returns both)
-fn deserialize_user_id<'de, D>(deserializer: D) -> Result<u64, D::Error>
+/// Deserialize user_id from either a string or number (Threads API returns both), or None if missing
+fn deserialize_user_id_opt<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -17,9 +17,11 @@ where
         Number(u64),
     }
 
-    match StringOrNumber::deserialize(deserializer)? {
-        StringOrNumber::String(s) => s.parse().map_err(de::Error::custom),
-        StringOrNumber::Number(n) => Ok(n),
+    let opt: Option<StringOrNumber> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(StringOrNumber::String(s)) => s.parse().map(Some).map_err(de::Error::custom),
+        Some(StringOrNumber::Number(n)) => Ok(Some(n)),
+        None => Ok(None),
     }
 }
 
@@ -27,8 +29,8 @@ where
 pub struct TokenResponse {
     pub access_token: String,
     #[allow(dead_code)]
-    #[serde(deserialize_with = "deserialize_user_id")]
-    pub user_id: u64,
+    #[serde(default, deserialize_with = "deserialize_user_id_opt")]
+    pub user_id: Option<u64>,
     /// Number of seconds until the token expires (3600 for short-lived, 5184000 for long-lived)
     #[serde(default)]
     pub expires_in: Option<u64>,
@@ -42,6 +44,21 @@ pub enum TokenExchangeError {
     Http { status: u16, body: String },
     #[error("Parse error: {0}")]
     Parse(String),
+}
+
+/// Parse response body as TokenResponse, logging body at debug level on failure
+async fn parse_token_response(
+    response: reqwest::Response,
+) -> Result<TokenResponse, TokenExchangeError> {
+    let body = response
+        .text()
+        .await
+        .map_err(|e| TokenExchangeError::Parse(e.to_string()))?;
+
+    serde_json::from_str(&body).map_err(|e| {
+        tracing::debug!(response_body = %body, "Failed to parse token response");
+        TokenExchangeError::Parse(e.to_string())
+    })
 }
 
 /// Exchange an authorization code for an access token
@@ -74,10 +91,7 @@ pub async fn exchange_code(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    response
-        .json::<TokenResponse>()
-        .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))
+    parse_token_response(response).await
 }
 
 /// Exchange a short-lived access token for a long-lived one (60 days)
@@ -104,10 +118,7 @@ pub async fn exchange_for_long_lived_token(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    response
-        .json::<TokenResponse>()
-        .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))
+    parse_token_response(response).await
 }
 
 /// Refresh a long-lived access token (extends validity by another 60 days)
@@ -133,8 +144,5 @@ pub async fn refresh_access_token(
         return Err(TokenExchangeError::Http { status, body });
     }
 
-    response
-        .json::<TokenResponse>()
-        .await
-        .map_err(|e| TokenExchangeError::Parse(e.to_string()))
+    parse_token_response(response).await
 }
