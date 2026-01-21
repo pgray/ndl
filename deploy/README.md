@@ -12,6 +12,19 @@ sudo ./setup.sh install
 sudo INSTALL_DIR=/srv/ndld ./setup.sh install
 ```
 
+Create `.env` with required secrets:
+
+```bash
+cat > /opt/ndld/.env << 'EOF'
+NDL_CLIENT_ID=your_client_id
+NDL_CLIENT_SECRET=your_client_secret
+NDLD_PUBLIC_URL=https://ndl.example.com
+NDLD_ACME_DOMAIN=ndl.example.com
+NDLD_ACME_EMAIL=you@example.com
+EOF
+chmod 600 /opt/ndld/.env
+```
+
 ## Uninstall
 
 ```bash
