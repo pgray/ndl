@@ -23,22 +23,12 @@ esac
 
 cd "$COMPOSE_DIR"
 
-# Capture current image IDs for rollback
-PREV_IMAGES=$(docker compose images -q 2>/dev/null || true)
-
 echo "Pulling latest images..."
 if ! docker compose pull; then
     die "Pull failed"
 fi
 
-# Check if images actually changed
-NEW_IMAGES=$(docker compose images -q 2>/dev/null || true)
-if [ "$PREV_IMAGES" = "$NEW_IMAGES" ]; then
-    echo "No new images, skipping restart"
-    exit 0
-fi
-
-echo "New images detected, restarting services..."
+echo "Updating services..."
 if ! docker compose up -d; then
     echo "Restart failed, attempting rollback..."
     docker compose down 2>/dev/null || true
