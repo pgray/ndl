@@ -275,27 +275,31 @@ pub async fn index() -> Markup {
 
                     div.install {
                         h2 { "Install ndl" }
-                        p {
-                            "Download a pre-built binary from "
-                            a href="https://github.com/pgray/ndl/releases" { "GitHub Releases" }
-                            ":"
+                        p { "Quick install (macOS/Linux):" }
+                        div.code-block {
+                            pre { code { "curl -fsSL https://raw.githubusercontent.com/pgray/ndl/main/install.sh | sh" } }
+                            button.copy-btn { "Copy" }
                         }
-                        ul.platforms {
-                            li { "Linux x86_64 (static)" }
-                            li { "Linux ARM64 (static)" }
-                            li { "macOS Intel" }
-                            li { "macOS Apple Silicon" }
-                        }
-                        p.note {
-                            "macOS: Remove quarantine after download: "
-                            code { "xattr -d com.apple.quarantine ./ndl" }
+                        p.note { "Or install to a custom directory:" }
+                        div.code-block {
+                            pre { code { "curl -fsSL https://raw.githubusercontent.com/pgray/ndl/main/install.sh | INSTALL_DIR=~/.local/bin sh" } }
+                            button.copy-btn { "Copy" }
                         }
                         p { "Or install with cargo:" }
-                        pre { code { "cargo install ndl" } }
+                        div.code-block {
+                            pre { code { "cargo install ndl" } }
+                            button.copy-btn { "Copy" }
+                        }
                         p { "Or build from source:" }
-                        pre { code { "git clone https://github.com/pgray/ndl\ncd ndl\ncargo install --path ndl" } }
+                        div.code-block {
+                            pre { code { "git clone https://github.com/pgray/ndl\ncd ndl\ncargo install --path ndl" } }
+                            button.copy-btn { "Copy" }
+                        }
                         p { "Then login:" }
-                        pre { code { "ndl login" } }
+                        div.code-block {
+                            pre { code { "ndl login" } }
+                            button.copy-btn { "Copy" }
+                        }
                     }
 
                     div.about {
@@ -331,6 +335,9 @@ pub async fn index() -> Markup {
                         "ndld " (VERSION) " (" (GIT_VERSION) ") · "
                         a href="https://github.com/pgray/ndl/blob/main/LICENSE" { "MIT License" }
                     }
+                }
+                script {
+                    (COPY_JS)
                 }
             }
         }
@@ -441,6 +448,35 @@ const LANDING_CSS: &str = r#"
         padding: 0.2rem 0.4rem;
         border-radius: 3px;
     }
+    .code-block {
+        position: relative;
+        margin: 0.75rem 0;
+    }
+    .code-block pre {
+        margin: 0;
+    }
+    .copy-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #888;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .copy-btn:hover {
+        background: rgba(255,255,255,0.2);
+        color: #fff;
+    }
+    .copy-btn.copied {
+        background: #00d4aa;
+        color: #0a0a0a;
+        border-color: #00d4aa;
+    }
     pre {
         background: rgba(0,0,0,0.4);
         border-radius: 6px;
@@ -464,6 +500,21 @@ const LANDING_CSS: &str = r#"
     .version a {
         color: #888;
     }
+"#;
+
+const COPY_JS: &str = r#"
+document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const code = btn.parentElement.querySelector('code').textContent;
+        await navigator.clipboard.writeText(code);
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copied');
+        }, 2000);
+    });
+});
 "#;
 
 /// GET /privacy-policy - Privacy policy page
