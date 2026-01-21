@@ -172,6 +172,7 @@ cargo test --workspace                  # Run all tests (optional but recommende
 
 **Required**: `cargo fmt`, `cargo clippy`, and `cargo check` must pass without errors.
 **Recommended**: Fix all clippy warnings before committing. Run full build and tests when making significant changes.
+**IMPORTANT**: UPDATE ANY README FILES RELEVANT TO CHANGES
 
 ## Updating Dependencies
 
