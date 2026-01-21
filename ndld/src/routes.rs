@@ -277,28 +277,28 @@ pub async fn index() -> Markup {
                         h2 { "Install ndl" }
                         p { "Quick install (macOS/Linux):" }
                         div.code-block {
-                            pre { code { "curl -fsSL https://raw.githubusercontent.com/pgray/ndl/main/install.sh | sh" } }
-                            button.copy-btn { "Copy" }
+                            pre { code #cmd1 { "curl -fsSL https://raw.githubusercontent.com/pgray/ndl/main/install.sh | sh" } }
+                            button.copy-btn onclick="copyCode('cmd1', this)" { "Copy" }
                         }
                         p.note { "Or install to a custom directory:" }
                         div.code-block {
-                            pre { code { "curl -fsSL https://raw.githubusercontent.com/pgray/ndl/main/install.sh | INSTALL_DIR=~/.local/bin sh" } }
-                            button.copy-btn { "Copy" }
+                            pre { code #cmd2 { "curl -fsSL https://raw.githubusercontent.com/pgray/ndl/main/install.sh | INSTALL_DIR=~/.local/bin sh" } }
+                            button.copy-btn onclick="copyCode('cmd2', this)" { "Copy" }
                         }
                         p { "Or install with cargo:" }
                         div.code-block {
-                            pre { code { "cargo install ndl" } }
-                            button.copy-btn { "Copy" }
+                            pre { code #cmd3 { "cargo install ndl" } }
+                            button.copy-btn onclick="copyCode('cmd3', this)" { "Copy" }
                         }
                         p { "Or build from source:" }
                         div.code-block {
-                            pre { code { "git clone https://github.com/pgray/ndl\ncd ndl\ncargo install --path ndl" } }
-                            button.copy-btn { "Copy" }
+                            pre { code #cmd4 { "git clone https://github.com/pgray/ndl\ncd ndl\ncargo install --path ndl" } }
+                            button.copy-btn onclick="copyCode('cmd4', this)" { "Copy" }
                         }
                         p { "Then login:" }
                         div.code-block {
-                            pre { code { "ndl login" } }
-                            button.copy-btn { "Copy" }
+                            pre { code #cmd5 { "ndl login" } }
+                            button.copy-btn onclick="copyCode('cmd5', this)" { "Copy" }
                         }
                     }
 
@@ -503,18 +503,23 @@ const LANDING_CSS: &str = r#"
 "#;
 
 const COPY_JS: &str = r#"
-document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-        const code = btn.parentElement.querySelector('code').textContent;
-        await navigator.clipboard.writeText(code);
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(() => {
-            btn.textContent = 'Copy';
-            btn.classList.remove('copied');
-        }, 2000);
-    });
-});
+function copyCode(id, btn) {
+    var text = document.getElementById(id).textContent;
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    btn.className = 'copy-btn copied';
+    setTimeout(function() {
+        btn.textContent = 'Copy';
+        btn.className = 'copy-btn';
+    }, 2000);
+}
 "#;
 
 /// GET /privacy-policy - Privacy policy page
