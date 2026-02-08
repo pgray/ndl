@@ -271,6 +271,11 @@ pub async fn index() -> Markup {
                             "It keeps your Threads API credentials secure by handling "
                             "the OAuth flow server-side."
                         }
+                        p {
+                            "Need access? Reach out to "
+                            a href="https://www.threads.net/@pgray_photo" target="_blank" { "@pgray_photo" }
+                            " on Threads for dev app access invites."
+                        }
                     }
 
                     div.install {
