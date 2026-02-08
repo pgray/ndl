@@ -48,7 +48,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 
 # Shared library
-ndl-core = { path = "../ndl-core", version = "0.2.14" }
+ndl-core = { path = "../ndl-core", version = "0.2.15" }
 
 [dev-dependencies]
 chrono = "0.4"
