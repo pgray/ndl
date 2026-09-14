@@ -1,168 +1,79 @@
-# Plan: Add Like/Heart Count Display
+# Plan: Like a post with `i`
 
 ## Overview
-Add like/heart count display to posts in the ndl TUI client for both Threads and Bluesky platforms.
 
-## 🔑 Key Research Findings
+Pressing `i` on the highlighted post (or on a selected reply in the detail
+panel) likes it on the current platform. `i` sits under the same right-hand
+finger as `r` (reply), so like/reply are a one-key pair.
 
-### Bluesky: ✅ EASY - Data Already Available
-- Like counts are **already included** in API responses (`feed_view.post.like_count`)
-- **No additional API calls** needed
-- Just need to extract the field and display it
-- Also includes: `reply_count`, `repost_count`, `quote_count`, `bookmark_count`
+## Status
 
-### Threads: ⚠️ COMPLEX - Requires Separate API Calls
-- Like counts are **NOT in the main media response**
-- Requires **separate Insights API calls** per thread: `GET /{thread_id}/insights?metric=likes`
-- **Performance concern**: N+1 queries (1 for thread list + N for each thread's insights)
-- **Recommendation**: Start by showing like counts for Bluesky only, add Threads later with hybrid approach
+- [x] `SocialClient::like_post(&self, post_id)` added to the platform trait
+- [x] Bluesky: creates an `app.bsky.feed.like` record via `bsky-sdk`
+- [x] Threads: returns `PlatformError::Unsupported` (no like endpoint in the API)
+- [x] TUI: `i` key, `AppEvent::LikeResult`, status messages, help text
+- [x] Liked marker (♥) in the list, detail header, and replies, from Bluesky's
+      `viewer.like`; `i` on an already-liked post is a no-op
+- [x] Engagement counts (♥ 💬 ↻) for Bluesky: right-aligned columns in the list
+      with a legend in the panel border, plus a counts line in the detail view.
+      `Post.stats` is `None` on Threads, so its panel renders as before.
+- [x] Threads counts via `GET /{id}/insights` (likes, replies, reposts, quotes,
+      shares), one call per post, cached 5 min in `ThreadsClient`; skipped for
+      `REPOST_FACADE`. Requires `threads_manage_insights` (added to
+      `OAUTH_SCOPES`); an old token gets a permission error, so insights are
+      disabled for the session with a warning to run `ndl login` again.
+- [x] Follower count in the panel title with the session delta, polled every
+      5 min: Threads `GET /me/threads_insights?metric=followers_count`, Bluesky
+      `app.bsky.actor.getProfile`.
+- [x] README / CLAUDE.md updated
+- [ ] Unlike (toggle) — see "Future" below
+- [ ] Like counts in the list/detail view (the original scope of this branch)
 
-### Implementation Recommendation
-1. **Phase 1** (Quick Win): Add like counts for **Bluesky only**
-   - Update `Post` struct with optional `like_count` field
-   - Extract data in `bluesky.rs` (2 small code changes)
-   - Update TUI to display counts (handle `None` for Threads)
+## Design
 
-2. **Phase 2** (Optional): Add Threads support with hybrid approach
-   - Fetch insights only for the focused/selected thread
-   - Show "-" for unfocused threads to avoid excessive API calls
+### Target selection
 
-## Current State
-- `Post` struct in `platform.rs:34-43` does not include like count field
-- Threads API requests (`api.rs:116`) only fetch: `id,text,username,timestamp,media_type,permalink`
-- Bluesky feed parsing (`bluesky.rs:204-228`) does not extract like counts
-- TUI (`tui.rs`) does not display like information
+`App::selected_target_id()` picks the post an action applies to: the selected
+reply if one is highlighted in the detail panel, otherwise the highlighted
+post in the list. Both `r` and `i` use it, so they always act on the same
+thing the user is looking at.
 
-## Investigation Phase ✅ COMPLETED
+### Bluesky
 
-### 1. Research Threads Graph API ✅
-- ✅ **Threads API provides like counts via Insights API**
-- ✅ **Metric name**: `"likes"` (not "like_count")
-- ✅ **Access method**: Separate Insights endpoint, not a direct field
-- ✅ **Endpoint**: `GET https://graph.threads.net/v1.0/{media_id}/insights?metric=likes,views,replies,reposts,quotes`
-- ⚠️ **IMPORTANT**: This requires a separate API call per thread to get insights
-- 📚 **Sources**: [Threads API Documentation](https://www.postman.com/meta/threads/documentation/dht3nzz/threads-api), [Meta Threads API Features](https://data365.co/threads)
+A like is a repo record of type `app.bsky.feed.like` whose `subject` is a
+strong ref (`uri` + `cid`) of the target post. Post IDs in ndl are already the
+AT URI, and `BlueskyClient::get_post_info()` (used by replies) fetches the
+`cid`. `BskyAgent::create_record` accepts `like::RecordData` directly.
 
-### 2. Research Bluesky AT Protocol ✅
-- ✅ **Field name**: `like_count` (integer, optional)
-- ✅ **Available in**: `PostView` struct from `app.bsky.feed.defs` lexicon
-- ✅ **Access path**: `feed_view.post.like_count` (also includes `reply_count`, `repost_count`, `quote_count`, `bookmark_count`)
-- ✅ **Already included** in both `get_author_feed` and `get_post_thread` responses
-- ✅ **atrium-api version**: 0.25 (confirmed in Cargo.toml)
-- 📚 **Sources**: [AT Protocol Lexicon](https://github.com/bluesky-social/atproto/blob/main/lexicons/app/bsky/feed/defs.json), [atrium-api docs](https://docs.rs/atrium-api/latest/atrium_api/)
+### Threads
 
-## Implementation Phase
+The Threads API (`graph.threads.net`) exposes publishing, replies,
+reply-management (hide/unhide), insights, and search. There is no endpoint to
+like a post as the authenticated user, so `ThreadsClient::like_post` returns
+`PlatformError::Unsupported` and the TUI shows
+`Threads error: liking isn't supported by the Threads API`.
 
-### 3. Update Core Data Model (`platform.rs`)
-- [ ] Add `like_count: Option<u32>` field to `Post` struct (line 34-43)
-- [ ] Consider rename to `engagement_count` if platforms differ significantly
+Like *counts* for Threads are available only via the Insights API
+(`GET /{media_id}/insights?metric=likes`), one call per post. That was the
+original scope of this branch and remains future work.
 
-### 4. Update Threads Client (`api.rs`)
+## Future
 
-⚠️ **DECISION REQUIRED**: Threads requires separate API calls to get insights (like counts). Options:
+- **Unlike / toggle**: Bluesky's `PostView.viewer.like` carries the URI of the
+  user's own like record when one exists; `BskyAgent::delete_record(uri)`
+  removes it. Toggling means tracking that URI per post.
+- **Threads counts**: one Insights call per post (`metric=likes,replies,reposts,shares`),
+  so fetch only for the selected post and cache; `PostStats.shares` is already
+  there for the Threads `shares` metric.
+- **Repost** (`app.bsky.feed.repost`) follows the same record pattern as like.
 
-**Option A: Skip like counts for Threads initially**
-- Pro: No additional API calls, simpler implementation
-- Pro: Avoid rate limiting concerns
-- Con: Feature parity with Bluesky lost
-- Implementation: Just add `like_count: None` for all Threads posts
+## References
 
-**Option B: Fetch insights separately (adds API calls)**
-- [ ] Add new method `get_thread_insights(&self, thread_id: &str)` to fetch likes
-- [ ] Call insights API: `GET /{thread_id}/insights?metric=likes`
-- [ ] Parse response to extract likes count
-- [ ] Update `get_threads()` to optionally fetch insights (batch or individual)
-- [ ] Update `get_thread_replies_nested()` to fetch insights for replies
-- [ ] Update `SocialClient` implementation to populate like_count
-- ⚠️ **Performance impact**: N+1 API calls (1 for threads list + N for each thread's insights)
-- Pro: Full feature parity with Bluesky
-- Con: Significantly more API calls, potential rate limiting
+Meta's developer docs are machine-readable (verified 2026-09-13):
 
-**Option C: Hybrid approach**
-- Fetch insights only for the selected/focused thread
-- Show "-" or blank for threads in the list
-- Implementation: Add `get_thread_insights()` method, call it only in detail view
-
-**RECOMMENDATION**: Start with Option A, then implement Option C if needed
-
-### 5. Update Bluesky Client (`bluesky.rs`) - STRAIGHTFORWARD ✅
-
-**Implementation details** (data already available, just need to extract it):
-
-- [ ] In `get_posts()` at line 215-226, add:
-  ```rust
-  like_count: feed_view.post.like_count.map(|c| c as u32),
-  ```
-
-- [ ] In `convert_reply_item()` at line 94-105, add to Post struct:
-  ```rust
-  like_count: post_view.like_count.map(|c| c as u32),
-  ```
-
-- [ ] No additional API calls needed - data is already in the response
-- [ ] The field is optional in the lexicon, so using `.map()` handles missing values gracefully
-- [ ] Also available: `reply_count`, `repost_count`, `quote_count` (for future enhancement)
-
-### 6. Update TUI Display (`tui.rs`)
-- [ ] Add like count to post list rendering (left panel)
-- [ ] Add like count to detail view rendering (right panel)
-- [ ] Choose display format (e.g., "❤ 42" or "42 likes")
-- [ ] Handle `None` case (e.g., show "❤ -" or hide entirely)
-- [ ] Ensure proper spacing/alignment with existing fields
-
-## Testing
-
-### 7. Manual Testing
-- [ ] Test Threads posts with various like counts (0, small, large numbers)
-- [ ] Test Bluesky posts with various like counts
-- [ ] Test posts where like count is not available
-- [ ] Test reply threads to ensure nested posts show likes
-- [ ] Verify both platforms display correctly
-- [ ] Test platform switching maintains correct counts
-
-### 8. Edge Cases
-- [ ] Posts with no likes (0 vs None)
-- [ ] Posts where API doesn't return like count
-- [ ] Very large like counts (formatting)
-- [ ] Rapid like count changes (refresh behavior)
-
-## Considerations
-
-- **API Rate Limits**:
-  - ✅ **Bluesky**: No additional overhead, data included in existing calls
-  - ⚠️ **Threads**: Insights API requires separate calls (1 per thread)
-  - Recommendation: Avoid fetching insights for all threads in list view
-- **Backwards Compatibility**: Optional `like_count: Option<u32>` field ensures graceful handling
-- **Display Formatting**:
-  - Consider abbreviated format for large numbers (e.g., "1.2K", "5.3M")
-  - Handle `None` case: show "-" or blank for Threads (Phase 1) or unfetched insights
-- **Refresh Strategy**: Like counts update on 15-second refresh cycle (existing behavior)
-- **Cross-posting**: Like counts are platform-specific (Bluesky will show, Threads won't in Phase 1)
-- **Platform Differences**:
-  - Bluesky: Real-time like counts always available
-  - Threads: Like counts require extra API call (insights endpoint)
-  - This asymmetry is acceptable - users will understand Threads limitations
-
-## Future Enhancements (Out of Scope)
-- Interactive liking/unliking posts
-- Sort posts by like count
-- Like count trends/changes indicators
-- **Reply counts** (Bluesky: `reply_count`, Threads: available via insights)
-- **Repost/quote counts** (Bluesky: `repost_count` + `quote_count`, Threads: `reposts` + `quotes` via insights)
-- **View counts** (Bluesky: not available, Threads: `views` via insights)
-- **Bookmark counts** (Bluesky: `bookmark_count`, Threads: not available)
-
-## References & Sources
-
-### Threads API Documentation
-- [Threads API Documentation (Postman)](https://www.postman.com/meta/threads/documentation/dht3nzz/threads-api)
-- [Meta Threads API Features Comparison](https://data365.co/threads)
-- [Guide to Getting Threads Metrics via API](https://creativewritingwizard.com/2024/08/13/a-guide-to-getting-threads-metrics-via-threads-api/)
-- Official docs: `https://developers.facebook.com/docs/threads/insights` (access restricted)
-
-### Bluesky AT Protocol Documentation
-- [AT Protocol Lexicon - Feed Definitions](https://github.com/bluesky-social/atproto/blob/main/lexicons/app/bsky/feed/defs.json)
-- [Bluesky API - getPosts Endpoint](https://docs.bsky.app/docs/api/app-bsky-feed-get-posts)
-- [atrium-api Rust Crate Documentation](https://docs.rs/atrium-api/latest/atrium_api/)
-- [bsky-sdk Rust Crate](https://docs.rs/bsky-sdk)
-- [Complete Guide to Bluesky API Integration](https://www.ayrshare.com/complete-guide-to-bluesky-api-integration-authorization-posting-analytics-comments/)
+- Index of all products: <https://developers.facebook.com/llms.txt>
+- Threads doc index: <https://developers.facebook.com/documentation/threads/llms.txt>
+- Any Threads page as markdown by appending `.md`, e.g.
+  <https://developers.facebook.com/documentation/threads/reference/reply-management.md>
+  and <https://developers.facebook.com/documentation/threads/insights.md>
+- No OpenAPI spec; a Postman collection exists under `tools-and-resources`.

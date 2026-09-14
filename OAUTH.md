@@ -111,6 +111,8 @@ ngrok http 1337
 | `threads_manage_replies`  | Read and manage replies    |
 | `threads_read_replies`    | Read replies only          |
 
+ndl requests `threads_basic`, `threads_read_replies`, `threads_manage_replies`, `threads_content_publish`, and `threads_manage_insights` (see `OAUTH_SCOPES` in `ndl-core/src/oauth.rs`). Adding a scope means existing users must run `ndl login` again to grant it.
+
 ## References
 
 - [Threads API docs](https://developers.facebook.com/docs/threads)

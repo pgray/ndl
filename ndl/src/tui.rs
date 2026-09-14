@@ -8,7 +8,7 @@ use ratatui::{
     DefaultTerminal, Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use std::collections::HashMap;
@@ -16,6 +16,16 @@ use std::io::{self, stdout};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+/// Width of each engagement-count column in the posts list
+const STAT_COL: usize = 4;
+/// Count column legend: likes, replies, reposts, quotes
+const STAT_SYMBOLS: [&str; 4] = ["♥", "💬", "↻", "❝"];
+/// Appended as a fifth column when a platform reports shares / sends
+const SHARE_SYMBOL: &str = "➤";
+/// How often the follower count is re-fetched per platform
+const FOLLOWERS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(300);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Panel {
@@ -35,7 +45,9 @@ pub enum AppEvent {
     PostsUpdated(Platform, Vec<Post>),
     ReplyResult(Platform, Result<(), String>),
     PostResult(Platform, Result<(), String>),
+    LikeResult(Platform, String, Result<(), String>),
     RepliesLoaded(Platform, String, Result<Vec<ReplyThread>, String>),
+    FollowersUpdated(Platform, u64),
 }
 
 /// Platform-specific state
@@ -45,6 +57,10 @@ pub struct PlatformState {
     pub selected_replies: Vec<ReplyThread>,
     pub loaded_replies_for: Option<String>,
     pub reply_selection: Option<usize>,
+    /// Latest follower count, once the platform has reported one
+    pub followers: Option<u64>,
+    /// The first count seen this session, so the title can show the session's drift
+    pub followers_baseline: Option<u64>,
 }
 
 impl PlatformState {
@@ -55,7 +71,27 @@ impl PlatformState {
             selected_replies: Vec::new(),
             loaded_replies_for: None,
             reply_selection: None,
+            followers: None,
+            followers_baseline: None,
         }
+    }
+
+    /// Flag a post (in the list or the loaded replies) as liked by the user
+    fn mark_liked(&mut self, post_id: &str) {
+        for post in &mut self.posts {
+            if post.id == post_id {
+                post.liked = true;
+            }
+        }
+        fn mark(replies: &mut [ReplyThread], post_id: &str) {
+            for reply in replies {
+                if reply.post.id == post_id {
+                    reply.post.liked = true;
+                }
+                mark(&mut reply.replies, post_id);
+            }
+        }
+        mark(&mut self.selected_replies, post_id);
     }
 }
 
@@ -190,6 +226,29 @@ impl App {
                 }
             });
         }
+
+        // Follower counts move slowly, and Threads charges an API call for one
+        for (platform, client) in &self.clients {
+            let platform = *platform;
+            let client = client.clone();
+            let tx = self.event_tx.clone();
+
+            tokio::spawn(async move {
+                loop {
+                    match client.get_follower_count().await {
+                        Ok(Some(followers)) => {
+                            let _ = tx
+                                .send(AppEvent::FollowersUpdated(platform, followers))
+                                .await;
+                        }
+                        Ok(None) => debug!("No follower count available for {}", platform),
+                        Err(e) => debug!("Follower count failed for {}: {}", platform, e),
+                    }
+
+                    tokio::time::sleep(FOLLOWERS_INTERVAL).await;
+                }
+            });
+        }
     }
 
     async fn main_loop(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -237,7 +296,7 @@ impl App {
         let mut status = self
             .status_message
             .as_deref()
-            .unwrap_or("? for help | p to post | r to reply | R to refresh")
+            .unwrap_or("? for help | p to post | r to reply | i to like | o to open | R to refresh")
             .to_string();
 
         // Add platform indicator if multi-platform mode is active
@@ -322,6 +381,9 @@ t            Swap panel positions
 p            Create new post
 P            Cross-post to all platforms
 r            Reply to thread or reply
+i            Like thread or reply
+o            Open thread or reply in browser
+↻ / ♥        Reposted / liked by you
 R            Refresh threads
 ] / Tab      Switch platform (multi-platform)
 Enter        Select item
@@ -355,17 +417,27 @@ q            Quit
             return;
         };
 
+        // Count columns appear only when the platform supplies counts with its posts
+        let show_stats = state.posts.iter().any(|p| p.stats.is_some());
+        let show_shares = state
+            .posts
+            .iter()
+            .any(|p| p.stats.is_some_and(|s| s.shares.is_some()));
+        // Inner width minus the "> " highlight gutter
+        let item_w = area.width.saturating_sub(4) as usize;
+        let stats_w = if show_stats {
+            STAT_COL * (STAT_SYMBOLS.len() + usize::from(show_shares))
+        } else {
+            0
+        };
+        let text_w = item_w.saturating_sub(stats_w).max(8);
+
         let items: Vec<ListItem> = state
             .posts
             .iter()
             .map(|p| {
                 let display = if let Some(text) = p.text.as_deref() {
-                    let truncated: String = text.chars().take(50).collect();
-                    if text.len() > 50 {
-                        format!("{}...", truncated)
-                    } else {
-                        truncated
-                    }
+                    text.replace(['\n', '\r'], " ")
                 } else {
                     // No text - show media type indicator
                     match p.media_type.as_deref() {
@@ -377,18 +449,82 @@ q            Quit
                         None => "[no text]".to_string(),
                     }
                 };
-                ListItem::new(Line::from(display))
+                let display = if p.reposted {
+                    format!("↻ {}", display)
+                } else {
+                    display
+                };
+                let mut spans = vec![Span::raw(Self::fit_width(&display, text_w))];
+                match (p.stats, show_stats) {
+                    (Some(stats), _) => {
+                        // Your own like is counted in red
+                        let like_style = if p.liked {
+                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default()
+                        };
+                        spans.push(Span::styled(
+                            Self::pad_left(&Self::compact(stats.likes), STAT_COL),
+                            like_style,
+                        ));
+                        spans.push(Span::raw(Self::pad_left(
+                            &Self::compact(stats.replies),
+                            STAT_COL,
+                        )));
+                        spans.push(Span::raw(Self::pad_left(
+                            &Self::compact(stats.reposts),
+                            STAT_COL,
+                        )));
+                        spans.push(Span::raw(Self::pad_left(
+                            &Self::compact(stats.quotes),
+                            STAT_COL,
+                        )));
+                        if show_shares {
+                            let shares = stats.shares.map_or("-".to_string(), Self::compact);
+                            spans.push(Span::raw(Self::pad_left(&shares, STAT_COL)));
+                        }
+                    }
+                    // Platform has counts but not for this post: leave the columns blank
+                    (None, true) => {}
+                    (None, false) => {
+                        if p.liked {
+                            spans.push(Span::styled(" ♥", Style::default().fg(Color::Red)));
+                        }
+                    }
+                }
+                ListItem::new(Line::from(spans))
             })
             .collect();
 
-        let title = format!(" {} ({}) ", self.current_platform, state.posts.len());
+        let mut title = format!(" {} ({})", self.current_platform, state.posts.len());
+        if let Some(followers) = state.followers {
+            title.push_str(&format!(" · 👥 {}", followers));
+            // Drift since the first count seen this session
+            if let Some(baseline) = state.followers_baseline {
+                let delta = followers as i64 - baseline as i64;
+                if delta != 0 {
+                    title.push_str(&format!(" ({:+})", delta));
+                }
+            }
+        }
+        title.push(' ');
+        let mut block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(border_style);
+        if show_stats {
+            // Legend sits in the top border, right-aligned over the count columns
+            let mut legend: String = STAT_SYMBOLS
+                .iter()
+                .map(|s| Self::pad_left(s, STAT_COL))
+                .collect();
+            if show_shares {
+                legend.push_str(&Self::pad_left(SHARE_SYMBOL, STAT_COL));
+            }
+            block = block.title_top(Line::from(legend).right_aligned());
+        }
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .title(title)
-                    .borders(Borders::ALL)
-                    .border_style(border_style),
-            )
+            .block(block)
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)
@@ -426,16 +562,42 @@ q            Quit
                             Some("IMAGE") => "[Image post]".to_string(),
                             Some("VIDEO") => "[Video post]".to_string(),
                             Some("CAROUSEL_ALBUM") => "[Carousel post]".to_string(),
+                            Some("QUOTE") => "[Quote post]".to_string(),
+                            Some("LINK") => "[Link post]".to_string(),
                             Some(other) => format!("[{} post]", other),
                             None => "[No text]".to_string(),
                         }
                     };
 
-                    let mut content = format!("@{}\n{}\n\n{}", author, timestamp, text);
+                    // Handle on the left, timestamp flush right, inside the borders
+                    let inner_width = area.width.saturating_sub(2) as usize;
+                    let mut handle = format!("@{}", author);
+                    if post.reposted {
+                        handle.push_str(" ↻");
+                    }
+                    if post.liked {
+                        handle.push_str(" ♥");
+                    }
+                    let header = Self::spread_line(&handle, timestamp, inner_width);
+                    let mut content = match post.stats {
+                        Some(stats) => {
+                            let mut counts = format!(
+                                "♥ {}  💬 {}  ↻ {}  ❝ {}",
+                                stats.likes, stats.replies, stats.reposts, stats.quotes
+                            );
+                            if let Some(shares) = stats.shares {
+                                counts.push_str(&format!("  ➤ {}", shares));
+                            }
+                            format!("{}\n{}\n\n{}", header, counts, text)
+                        }
+                        None => format!("{}\n\n{}", header, text),
+                    };
 
                     // Add replies section
                     if !state.selected_replies.is_empty() {
-                        content.push_str("\n\n--- Replies (j/k to select, r to reply) ---\n");
+                        content.push_str(
+                            "\n\n--- Replies (j/k to select, r to reply, i to like) ---\n",
+                        );
                         let selected_idx = state.reply_selection;
                         fn format_replies(
                             replies: &[ReplyThread],
@@ -453,9 +615,10 @@ q            Quit
                                 } else {
                                     "  "
                                 };
+                                let heart = if reply.post.liked { " ♥" } else { "" };
                                 out.push_str(&format!(
-                                    "\n{}{}@{}: {}\n",
-                                    marker, prefix, user, text
+                                    "\n{}{}@{}: {}{}\n",
+                                    marker, prefix, user, text, heart
                                 ));
                                 *counter += 1;
                                 if !reply.replies.is_empty() {
@@ -542,6 +705,28 @@ q            Quit
                         self.status_message = Some(format!("{} error: {}", platform, e));
                     }
                 },
+                AppEvent::LikeResult(platform, post_id, result) => match result {
+                    Ok(()) => {
+                        info!("Like sent successfully to {}", platform);
+                        if let Some(state) = self.platform_states.get_mut(&platform) {
+                            state.mark_liked(&post_id);
+                        }
+                        self.status_message = Some(format!("Liked on {}!", platform));
+                    }
+                    Err(ref e) => {
+                        error!("Like on {} failed: {}", platform, e);
+                        self.status_message = Some(format!("{} error: {}", platform, e));
+                    }
+                },
+                AppEvent::FollowersUpdated(platform, followers) => {
+                    debug!("{} follower count: {}", platform, followers);
+                    if let Some(state) = self.platform_states.get_mut(&platform) {
+                        state.followers = Some(followers);
+                        if state.followers_baseline.is_none() {
+                            state.followers_baseline = Some(followers);
+                        }
+                    }
+                }
                 AppEvent::RepliesLoaded(platform, post_id, result) => {
                     if let Some(state) = self.platform_states.get_mut(&platform) {
                         state.loaded_replies_for = Some(post_id.clone());
@@ -629,6 +814,8 @@ q            Quit
             KeyCode::Char('?') => self.show_help = true,
             KeyCode::Char('t') => self.toggle_panel(),
             KeyCode::Char('r') => self.start_reply(),
+            KeyCode::Char('i') => self.like_selected(),
+            KeyCode::Char('o') => self.open_selected(),
             KeyCode::Char('p') => self.start_post(),
             KeyCode::Char('P') => self.start_cross_post(), // Shift+P for cross-post
             KeyCode::Char('R') => self.refresh_threads().await,
@@ -676,24 +863,117 @@ q            Quit
         self.input_buffer.clear();
     }
 
+    /// The post an action should target: the selected reply, else the highlighted post
+    fn selected_target(&self) -> Option<&Post> {
+        let state = self.platform_states.get(&self.current_platform)?;
+        if let Some(reply_idx) = state.reply_selection {
+            Self::get_reply_at_index(&state.selected_replies, reply_idx)
+        } else {
+            let idx = state.list_state.selected()?;
+            state.posts.get(idx)
+        }
+    }
+
+    /// Lay `left` and `right` out on one line with `right` flush against `width`
+    fn spread_line(left: &str, right: &str, width: usize) -> String {
+        let used = left.width() + right.width();
+        let pad = width.saturating_sub(used).max(1);
+        format!("{}{}{}", left, " ".repeat(pad), right)
+    }
+
+    /// Shorten a count to fit a narrow column: `9999`, `12k`, `1.2M`
+    fn compact(n: u64) -> String {
+        match n {
+            0..10_000 => n.to_string(),
+            10_000..1_000_000 => format!("{}k", n / 1_000),
+            _ => format!("{:.1}M", n as f64 / 1_000_000.0),
+        }
+    }
+
+    /// Right-align `s` within `width` display cells
+    fn pad_left(s: &str, width: usize) -> String {
+        format!("{}{}", " ".repeat(width.saturating_sub(s.width())), s)
+    }
+
+    /// Truncate `s` to `width` display cells (ending in an ellipsis), then pad to exactly `width`
+    fn fit_width(s: &str, width: usize) -> String {
+        if s.width() <= width {
+            return format!("{}{}", s, " ".repeat(width - s.width()));
+        }
+        let target = width.saturating_sub(1); // leave room for the ellipsis
+        let mut out = String::new();
+        let mut used = 0;
+        for ch in s.chars() {
+            let w = ch.width().unwrap_or(0);
+            if used + w > target {
+                break;
+            }
+            out.push(ch);
+            used += w;
+        }
+        out.push('…');
+        used += 1;
+        format!("{}{}", out, " ".repeat(width.saturating_sub(used)))
+    }
+
+    fn like_selected(&mut self) {
+        let Some(target) = self.selected_target() else {
+            return;
+        };
+        if target.liked {
+            self.status_message = Some(format!("Already liked on {}", self.current_platform));
+            return;
+        }
+        let post_id = target.id.clone();
+        let Some(client) = self.clients.get(&self.current_platform) else {
+            return;
+        };
+
+        let client = client.clone();
+        let tx = self.event_tx.clone();
+        let platform = self.current_platform;
+
+        info!("Liking {} on {}", post_id, platform);
+        self.status_message = Some(format!("Liking on {}...", platform));
+
+        tokio::spawn(async move {
+            let result = client.like_post(&post_id).await;
+            let _ = tx
+                .send(AppEvent::LikeResult(
+                    platform,
+                    post_id,
+                    result.map_err(|e| e.to_string()),
+                ))
+                .await;
+        });
+    }
+
+    /// Open the highlighted post (or selected reply) in the system browser
+    fn open_selected(&mut self) {
+        let Some(target) = self.selected_target() else {
+            return;
+        };
+        let Some(url) = target.permalink.clone() else {
+            self.status_message = Some("No link for this post".to_string());
+            return;
+        };
+        match open::that_detached(&url) {
+            Ok(()) => {
+                info!("Opened {} in browser", url);
+                self.status_message = Some(format!("Opened {}", url));
+            }
+            Err(e) => {
+                error!("Failed to open {}: {}", url, e);
+                self.status_message = Some(format!("Couldn't open browser: {}", e));
+            }
+        }
+    }
+
     async fn send_reply(&mut self) {
         let tx = self.event_tx.clone();
         let text = self.input_buffer.clone();
 
-        let Some(state) = self.platform_states.get(&self.current_platform) else {
-            return;
-        };
-
-        // Get the post ID to reply to: selected reply or main post
-        let reply_to_id = if let Some(reply_idx) = state.reply_selection {
-            Self::get_reply_id_at_index(&state.selected_replies, reply_idx)
-        } else if let Some(idx) = state.list_state.selected() {
-            state.posts.get(idx).map(|p| p.id.clone())
-        } else {
-            None
-        };
-
-        if let Some(post_id) = reply_to_id
+        if let Some(post_id) = self.selected_target().map(|p| p.id.clone())
             && let Some(client) = self.clients.get(&self.current_platform)
         {
             let client = client.clone();
@@ -928,17 +1208,21 @@ q            Quit
             .fold(0, |acc, r| acc + 1 + Self::count_replies(&r.replies))
     }
 
-    /// Get the reply ID at the given flattened index
-    fn get_reply_id_at_index(replies: &[ReplyThread], target: usize) -> Option<String> {
+    /// Get the reply at the given flattened index
+    fn get_reply_at_index(replies: &[ReplyThread], target: usize) -> Option<&Post> {
         let mut current = 0;
-        fn find(replies: &[ReplyThread], target: usize, current: &mut usize) -> Option<String> {
+        fn find<'a>(
+            replies: &'a [ReplyThread],
+            target: usize,
+            current: &mut usize,
+        ) -> Option<&'a Post> {
             for reply in replies {
                 if *current == target {
-                    return Some(reply.post.id.clone());
+                    return Some(&reply.post);
                 }
                 *current += 1;
-                if let Some(id) = find(&reply.replies, target, current) {
-                    return Some(id);
+                if let Some(post) = find(&reply.replies, target, current) {
+                    return Some(post);
                 }
             }
             None

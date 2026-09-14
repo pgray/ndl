@@ -64,8 +64,46 @@ async fn test_index_page() {
         .unwrap();
     let html = String::from_utf8(body.to_vec()).unwrap();
 
+    assert!(html.contains("ndl - a TUI for"));
+    assert!(html.contains(r#"href="https://threads.net" target="_blank">threads</a>"#));
+    assert!(html.contains("/demo.png"));
     assert!(html.contains("ndld"));
     assert!(html.contains("OAuth"));
+}
+
+#[tokio::test]
+async fn test_demo_png() {
+    let state = create_test_state();
+    let app = create_test_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/demo.png")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let content_type = response
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    assert_eq!(content_type, "image/png");
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(body.len() > 8);
+    assert_eq!(
+        &body[0..8],
+        &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    );
 }
 
 #[tokio::test]

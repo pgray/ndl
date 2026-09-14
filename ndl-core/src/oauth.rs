@@ -2,8 +2,7 @@ use serde::{Deserialize, Deserializer, de};
 use thiserror::Error;
 
 pub const TOKEN_URL: &str = "https://graph.threads.net/oauth/access_token";
-pub const OAUTH_SCOPES: &str =
-    "threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish";
+pub const OAUTH_SCOPES: &str = "threads_basic,threads_read_replies,threads_manage_replies,threads_content_publish,threads_manage_insights";
 
 /// Deserialize user_id from either a string or number (Threads API returns both), or None if missing
 fn deserialize_user_id_opt<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>

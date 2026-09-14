@@ -1,6 +1,10 @@
 use async_trait::async_trait;
-use atrium_api::app::bsky::feed::defs::{ThreadViewPostData, ThreadViewPostRepliesItem};
+use atrium_api::app::bsky::feed::defs::{
+    FeedViewPostReasonRefs, PostView, PostViewEmbedRefs, ThreadViewPostData,
+    ThreadViewPostRepliesItem,
+};
 use atrium_api::app::bsky::feed::get_post_thread::OutputThreadRefs;
+use atrium_api::app::bsky::feed::like::RecordData as LikeRecordData;
 use atrium_api::app::bsky::feed::post::{RecordData, ReplyRefData};
 use atrium_api::com::atproto::repo::strong_ref::MainData as StrongRef;
 use atrium_api::types::Union;
@@ -9,7 +13,60 @@ use bsky_sdk::BskyAgent;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::platform::{PlatformError, Post, ReplyThread, SocialClient};
+use crate::platform::{PlatformError, Post, PostStats, ReplyThread, SocialClient};
+
+/// Text of a post record. Image-only and quote-only posts carry an empty
+/// string rather than no text, so treat blank text as absent.
+fn record_text(record: &atrium_api::types::Unknown) -> Option<String> {
+    serde_json::to_value(record)
+        .ok()
+        .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(String::from))
+        .filter(|t| !t.trim().is_empty())
+}
+
+/// Coarse media type from a post's embed, using labels the TUI already knows
+fn embed_media_type(embed: Option<&Union<PostViewEmbedRefs>>) -> Option<String> {
+    let label = match embed? {
+        Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(_)) => "IMAGE",
+        Union::Refs(PostViewEmbedRefs::AppBskyEmbedVideoView(_)) => "VIDEO",
+        Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(_)) => "LINK",
+        Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(_))
+        | Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(_)) => "QUOTE",
+        Union::Unknown(_) => return None,
+    };
+    Some(label.to_string())
+}
+
+/// Engagement counter from the API (absent or negative counts read as zero)
+fn count(n: Option<i64>) -> u64 {
+    n.and_then(|n| u64::try_from(n).ok()).unwrap_or(0)
+}
+
+/// Convert a Bluesky post view into the platform-agnostic Post
+fn post_from_view(post_view: &PostView, reposted: bool) -> Post {
+    let handle = post_view.author.handle.as_str();
+    Post {
+        id: post_view.uri.to_string(),
+        text: record_text(&post_view.record),
+        author_handle: Some(handle.to_string()),
+        timestamp: Some(post_view.indexed_at.as_ref().to_string()),
+        permalink: Some(format!(
+            "https://bsky.app/profile/{}/post/{}",
+            handle,
+            post_view.uri.split('/').next_back().unwrap_or("")
+        )),
+        media_type: embed_media_type(post_view.embed.as_ref()),
+        liked: post_view.viewer.as_ref().is_some_and(|v| v.like.is_some()),
+        reposted,
+        stats: Some(PostStats {
+            likes: count(post_view.like_count),
+            replies: count(post_view.reply_count),
+            reposts: count(post_view.repost_count),
+            quotes: count(post_view.quote_count),
+            shares: None,
+        }),
+    }
+}
 
 #[derive(Clone)]
 pub struct BlueskyClient {
@@ -84,25 +141,7 @@ impl BlueskyClient {
     fn convert_reply_item(&self, item: &Union<ThreadViewPostRepliesItem>) -> Option<ReplyThread> {
         match item {
             Union::Refs(ThreadViewPostRepliesItem::ThreadViewPost(thread_post)) => {
-                let post_view = &thread_post.data.post;
-
-                // Extract text from the record
-                let text = serde_json::to_value(&post_view.record)
-                    .ok()
-                    .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(String::from));
-
-                let post = Post {
-                    id: post_view.uri.to_string(),
-                    text,
-                    author_handle: Some(post_view.author.handle.as_str().to_string()),
-                    timestamp: Some(post_view.indexed_at.as_ref().to_string()),
-                    permalink: Some(format!(
-                        "https://bsky.app/profile/{}/post/{}",
-                        post_view.author.handle.as_str(),
-                        post_view.uri.split('/').next_back().unwrap_or("")
-                    )),
-                    media_type: None,
-                };
+                let post = post_from_view(&thread_post.data.post, false);
 
                 // Recursively extract nested replies
                 let nested_replies = self.extract_replies(&thread_post.data);
@@ -206,24 +245,13 @@ impl SocialClient for BlueskyClient {
             .feed
             .iter()
             .map(|feed_view| {
-                // Extract text from the record
-                // The record is Unknown type, we need to serialize it to JSON and extract text
-                let text = serde_json::to_value(&feed_view.post.record)
-                    .ok()
-                    .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(String::from));
-
-                Post {
-                    id: feed_view.post.uri.to_string(),
-                    text,
-                    author_handle: Some(feed_view.post.author.handle.as_str().to_string()),
-                    timestamp: Some(feed_view.post.indexed_at.as_ref().to_string()),
-                    permalink: Some(format!(
-                        "https://bsky.app/profile/{}/post/{}",
-                        feed_view.post.author.handle.as_str(),
-                        feed_view.post.uri.split('/').next_back().unwrap_or("")
-                    )),
-                    media_type: None,
-                }
+                // In the author feed a repost shows up as the original post
+                // with a repost reason attached.
+                let reposted = matches!(
+                    feed_view.reason,
+                    Some(Union::Refs(FeedViewPostReasonRefs::ReasonRepost(_)))
+                );
+                post_from_view(&feed_view.post, reposted)
             })
             .collect())
     }
@@ -338,5 +366,54 @@ impl SocialClient for BlueskyClient {
             .map_err(|e| PlatformError::Api(format!("Failed to create reply: {}", e)))?;
 
         Ok(())
+    }
+
+    async fn like_post(&self, post_id: &str) -> Result<(), PlatformError> {
+        // post_id is the AT URI; a like record needs a strong ref (uri + cid)
+        let (cid, _) = self.get_post_info(post_id).await?;
+
+        let subject = StrongRef {
+            cid: cid
+                .parse()
+                .map_err(|e| PlatformError::Api(format!("Invalid CID: {}", e)))?,
+            uri: post_id.to_string(),
+        };
+
+        let agent = self.agent.read().await;
+
+        agent
+            .create_record(LikeRecordData {
+                created_at: Datetime::now(),
+                subject: subject.into(),
+                via: None,
+            })
+            .await
+            .map_err(|e| PlatformError::Api(format!("Failed to like post: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn get_follower_count(&self) -> Result<Option<u64>, PlatformError> {
+        let agent = self.agent.read().await;
+
+        let session = agent
+            .get_session()
+            .await
+            .ok_or_else(|| PlatformError::Auth("No active session".to_string()))?;
+        let did = session.did.clone();
+
+        let profile = agent
+            .api
+            .app
+            .bsky
+            .actor
+            .get_profile(
+                atrium_api::app::bsky::actor::get_profile::ParametersData { actor: did.into() }
+                    .into(),
+            )
+            .await
+            .map_err(|e| PlatformError::Api(format!("Failed to get profile: {}", e)))?;
+
+        Ok(Some(count(profile.data.followers_count)))
     }
 }
