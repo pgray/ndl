@@ -26,8 +26,12 @@ Social media notifications can pull you out of flow state. needle lets you:
 - **Thread feed** - View your threads with auto-refresh every 15 seconds
 - **Nested replies** - See replies to threads, including replies-to-replies (2 levels deep)
 - **Quick replies** - Respond to threads without leaving the terminal
+- **Like posts** - Press `i` to like the highlighted post or reply; liked posts show a ♥ (Bluesky; the Threads API has no like endpoint)
+- **Open in browser** - Press `o` to open the highlighted post or reply in your browser
+- **Engagement counts** - Likes, replies, reposts, quotes, and (on Threads) shares per post, as columns in the list with a legend in the panel border, and in the detail view. Threads counts come from the Insights API and are cached for five minutes
+- **Follower count** - Shown in the feed panel title with the change since you opened ndl, refreshed every five minutes
 - **Post new threads** - Create new posts directly from the terminal
-- **Media type indicators** - Reposts, images, videos, and carousels clearly labeled
+- **Media type indicators** - Reposts (↻), images, videos, quotes, links, and carousels clearly labeled
 - **Minimal footprint** - Runs in a terminal, no Electron bloat
 
 ## Project Structure
@@ -54,6 +58,8 @@ cd ndl
 cargo build --release --workspace
 ```
 
+A `Makefile` wraps the common commands: `make ndl` runs the TUI, `make ndld` runs the auth server locally on port 8080 with placeholder credentials, `make chk` runs fmt, clippy, and check, and `make test` runs the tests. Run `make` alone to list targets.
+
 On Linux, the build uses [wild](https://github.com/davidlattimore/wild) linker for faster builds.
 
 Install with `cargo install wild-linker` and ensure `clang` is available.
@@ -75,6 +81,8 @@ ndl login          # Login to Threads
 # or
 ndl login threads  # Explicitly specify Threads
 ```
+
+ndl asks for `threads_basic`, `threads_read_replies`, `threads_manage_replies`, `threads_content_publish`, and `threads_manage_insights`. If you logged in before insights were added, engagement counts and the follower count stay hidden until you run `ndl login` again to grant the new permission.
 
 ### Bluesky Authentication
 
@@ -237,6 +245,7 @@ The server exposes:
 - `GET /` - Landing page with project info
 - `GET /privacy-policy` - Privacy policy
 - `GET /tos` - Terms of service
+- `GET /demo.png` - Embedded screenshot shown on the landing page
 - `POST /auth/start` - Start OAuth session
 - `GET /auth/callback` - OAuth callback (configure in Threads app)
 - `GET /auth/poll/{session_id}` - Poll for auth completion
@@ -269,6 +278,8 @@ When you have multiple platforms configured, ndl automatically enters multi-plat
 | `p`         | Post new thread                  |
 | `P`         | Cross-post to all platforms      |
 | `r`         | Reply to selected thread         |
+| `i`         | Like selected thread or reply    |
+| `o`         | Open selected post in browser    |
 | `R`         | Refresh feed                     |
 | `Tab`/`]`   | Switch platform (multi-platform) |
 | `Enter`     | Select / focus detail            |
@@ -309,7 +320,9 @@ This bumps versions, creates a tag, builds binaries, publishes to crates.io, and
 
 ### Future Enhancements
 
-- [ ] Like/repost actions
+- [x] Like action (`i`) on Bluesky
+- [ ] Like action on Threads (blocked: the Threads API has no like endpoint)
+- [ ] Repost actions
 - [ ] Media preview (images)
 - [ ] More platforms (Mastodon, etc.)
 

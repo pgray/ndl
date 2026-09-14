@@ -41,6 +41,7 @@ dirs = "6"
 urlencoding = "2"
 open = "5"
 thiserror = "2"
+unicode-width = "0.2"
 
 # Logging
 tracing = "0.1"

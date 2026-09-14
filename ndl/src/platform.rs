@@ -12,6 +12,8 @@ pub enum PlatformError {
     Auth(String),
     #[error("API error: {0}")]
     Api(String),
+    #[error("{0}")]
+    Unsupported(String),
 }
 
 /// Platform identifier
@@ -30,6 +32,18 @@ impl fmt::Display for Platform {
     }
 }
 
+/// Engagement counts for a post
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PostStats {
+    pub likes: u64,
+    pub replies: u64,
+    pub reposts: u64,
+    /// Quote posts referencing this post
+    pub quotes: u64,
+    /// Shares / sends, where the platform reports them (Threads Insights only)
+    pub shares: Option<u64>,
+}
+
 /// Platform-agnostic post representation
 #[derive(Debug, Clone)]
 pub struct Post {
@@ -40,6 +54,12 @@ pub struct Post {
     pub permalink: Option<String>,
     /// Media type (e.g., "REPOST_FACADE", "IMAGE", "VIDEO", "CAROUSEL_ALBUM")
     pub media_type: Option<String>,
+    /// Whether the authenticated user has liked this post (always false on Threads)
+    pub liked: bool,
+    /// Whether this feed item is a repost by the authenticated user
+    pub reposted: bool,
+    /// Engagement counts, when the platform returns them with the post
+    pub stats: Option<PostStats>,
 }
 
 /// Platform-agnostic reply thread (recursive structure)
@@ -67,6 +87,16 @@ pub trait SocialClient: Send + Sync {
 
     /// Reply to a post
     async fn reply_to_post(&self, post_id: &str, text: &str) -> Result<(), PlatformError>;
+
+    /// Like a post
+    async fn like_post(&self, post_id: &str) -> Result<(), PlatformError>;
+
+    /// The authenticated user's follower count.
+    ///
+    /// `Ok(None)` means the platform can't provide the number right now (for
+    /// example a Threads token granted before the insights scope existed);
+    /// callers should quietly render nothing rather than surface an error.
+    async fn get_follower_count(&self) -> Result<Option<u64>, PlatformError>;
 }
 
 // Helper to convert from platform-specific errors

@@ -1,7 +1,7 @@
 use axum::{
     Router,
     extract::{ConnectInfo, Path, Query, State},
-    http::{HeaderMap, StatusCode, request::Request},
+    http::{HeaderMap, StatusCode, header, request::Request},
     response::{Html, IntoResponse, Json},
     routing::{get, post},
 };
@@ -81,6 +81,9 @@ use crate::auth::{AuthState, OAuthConfig, SessionStore};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_VERSION: &str = env!("NDLD_GIT_VERSION");
+
+/// Screenshot of ndl running in a terminal, shown on the landing page.
+const DEMO_PNG: &[u8] = include_bytes!("../assets/demo.png");
 
 #[derive(Clone)]
 pub struct AppState {
@@ -233,6 +236,17 @@ pub struct HealthResponse {
     pub git: &'static str,
 }
 
+/// GET /demo.png - Screenshot of ndl running in a terminal
+pub async fn demo_png() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "image/png"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        DEMO_PNG,
+    )
+}
+
 /// GET / - Landing page
 pub async fn index() -> Markup {
     html! {
@@ -241,15 +255,41 @@ pub async fn index() -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { "ndl - needle" }
+                title { "ndl - a TUI for threads" }
                 style {
                     (LANDING_CSS)
                 }
             }
             body {
                 div.container {
-                    h1 { "ndld" }
-                    p.tagline { "OAuth authentication server for ndl (needle)" }
+                    h1 {
+                        "ndl - a TUI for "
+                        a href="https://threads.net" target="_blank" { "threads" }
+                    }
+                    p.tagline { "A minimal terminal client for Threads (and Bluesky)." }
+
+                    div.about {
+                        h2 { "What is ndl?" }
+                        p {
+                            "ndl (needle) is a minimal terminal client for "
+                            a href="https://threads.net" target="_blank" { "Threads" }
+                            " and "
+                            a href="https://bsky.app" target="_blank" { "Bluesky" }
+                            ". Keep an eye on replies and fire off a post without ever "
+                            "opening a browser."
+                        }
+                        p {
+                            "New here? Jump to "
+                            a href="#install" { "install" }
+                            " below, then run "
+                            code { "ndl login" }
+                            " to connect an account."
+                        }
+                    }
+
+                    div.screenshot {
+                        img src="/demo.png" alt="ndl terminal screenshot";
+                    }
 
                     div.links {
                         a.button href="https://github.com/pgray/ndl" target="_blank" {
@@ -261,24 +301,15 @@ pub async fn index() -> Markup {
                     }
 
                     div.about {
-                        h2 { "What is this?" }
+                        h2 { "Need dev access?" }
                         p {
-                            "This server handles OAuth authentication for "
-                            a href="https://github.com/pgray/ndl" { "ndl" }
-                            ", a minimal TUI client for Threads."
-                        }
-                        p {
-                            "It keeps your Threads API credentials secure by handling "
-                            "the OAuth flow server-side."
-                        }
-                        p {
-                            "Need access? Reach out to "
+                            "Reach out to "
                             a href="https://www.threads.net/@pgray_photo" target="_blank" { "@pgray_photo" }
                             " on Threads for dev app access invites."
                         }
                     }
 
-                    div.install {
+                    div.install #install {
                         h2 { "Install ndl" }
                         p { "Quick install (macOS/Linux):" }
                         div.code-block {
@@ -317,6 +348,11 @@ pub async fn index() -> Markup {
                         }
                         p {
                             a href="/tos" { "Terms of Service" }
+                        }
+                        p.note {
+                            "This site is ndld, the OAuth login helper for ndl. "
+                            a href="https://github.com/pgray/ndl" { "Source on GitHub" }
+                            "."
                         }
                     }
 
@@ -396,6 +432,17 @@ const LANDING_CSS: &str = r#"
         border-radius: 12px;
         padding: 1.5rem;
         margin-bottom: 2rem;
+    }
+    .screenshot {
+        margin-bottom: 2rem;
+    }
+    .screenshot img {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     }
     h2 {
         font-size: 1.2rem;
@@ -694,6 +741,7 @@ pub async fn tos() -> Markup {
 fn base_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(index))
+        .route("/demo.png", get(demo_png))
         .route("/privacy-policy", get(privacy_policy))
         .route("/tos", get(tos))
         .route("/auth/start", post(start_auth))
@@ -738,6 +786,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
     Router::new()
         .route("/", get(index))
+        .route("/demo.png", get(demo_png))
         .route("/privacy-policy", get(privacy_policy))
         .route("/tos", get(tos))
         .route("/auth/callback", get(auth_callback))

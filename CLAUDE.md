@@ -65,6 +65,8 @@ cargo run -p ndl                 # Run the TUI
 cargo run -p ndld                # Run the auth server
 ```
 
+A `Makefile` wraps these: `make ndl` runs the TUI (`ARGS="login bluesky"` passes CLI args), `make ndld` runs the auth server in dev mode (plain HTTP on localhost:8080, placeholder client id/secret unless set in the environment, ACME/TLS vars ignored), `make all` builds both, `make chk` runs the pre-commit checklist below with clippy warnings as errors, plus `make test` and `make clean`. `make` alone prints the target list.
+
 ## Configuration
 
 Config file: `~/.config/ndl/config.json`
@@ -130,8 +132,10 @@ Key endpoints used:
 - `GET /{thread_id}/replies` - Replies to a thread
 - `POST /me/threads` - Create container (with `media_type=TEXT`)
 - `POST /me/threads_publish` - Publish container
+- `GET /{media_id}/insights?metric=likes,replies,reposts,quotes,shares` - Per-post counts (cached 5 min in `ThreadsClient`; empty for `REPOST_FACADE`)
+- `GET /me/threads_insights?metric=followers_count` - Follower count (polled every 5 min)
 
-All requests require `access_token` query parameter.
+All requests require `access_token` query parameter. Requested OAuth scopes live in `OAUTH_SCOPES` (`ndl-core/src/oauth.rs`), shared by ndl and ndld. The insights endpoints need `threads_manage_insights`; a token issued before that scope was added gets a permission error, so the client disables insights for the session and logs a warning telling the user to run `ndl login` again. There is no like/unlike endpoint.
 
 ## TUI Architecture
 
@@ -142,6 +146,9 @@ All requests require `access_token` query parameter.
 - Background task refreshes posts every 15 seconds for each platform
 - Events sent via `mpsc` channel (`AppEvent` enum)
 - Platform switching with `Tab` or `]` key
+- `i` likes the highlighted post or selected reply via `SocialClient::like_post` (Bluesky only; Threads returns `PlatformError::Unsupported`)
+- `o` opens the highlighted post or selected reply's `permalink` in the browser (`open::that_detached`)
+- `Post.stats: Option<PostStats>` carries like/reply/repost counts; the list draws count columns (legend in the panel title) only when some post has stats. Bluesky fills it from `PostView`; Threads leaves it `None`
 
 ## Code Conventions
 
